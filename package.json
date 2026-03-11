@@ -1,0 +1,30 @@
+{
+  "name": "kcalculator",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @kcalculator/api",
+    "dev:dashboard": "npm run dev -w @kcalculator/dashboard",
+    "build": "npm run build -w @kcalculator/shared && npm run build -w @kcalculator/api && npm run build -w @kcalculator/dashboard",
+    "lint": "npm run lint -w @kcalculator/dashboard",
+    "prisma:generate": "npm run prisma:generate -w @kcalculator/api",
+    "db:push": "npm run prisma:push -w @kcalculator/api",
+    "seed": "npm run seed -w @kcalculator/api",
+    "import:csv": "npm run import:csv -w @kcalculator/api",
+    "export:csv": "npm run export:csv -w @kcalculator/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

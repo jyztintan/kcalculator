@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MealType {
+  breakfast
+  lunch
+  dinner
+  snack
+}
+
+enum ReminderType {
+  log_meal
+  weigh_in
+  custom
+}
+
+enum EntrySource {
+  manual
+  favorite
+  parsed
+}
+
+model User {
+  id                    String        @id @default(cuid())
+  telegramId            String        @unique
+  username              String?
+  firstName             String?
+  timezone              String        @default("Asia/Singapore")
+  defaultCalorieTarget  Int           @default(2267)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  foods                 Food[]
+  mealEntries           MealEntry[]
+  reminders             Reminder[]
+  dailyTargets          DailyTarget[]
+  parserAudits          ParserAudit[]
+}
+
+model Food {
+  id               String     @id @default(cuid())
+  userId           String
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  slug             String
+  defaultCalories  Int
+  defaultMealType  MealType?
+  isFavorite       Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  mealEntries      MealEntry[]
+
+  @@unique([userId, slug])
+}
+
+model MealEntry {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodId      String?
+  food        Food?       @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  entryDate   DateTime
+  mealType    MealType
+  foodName    String
+  calories    Int
+  quantity    String?
+  source      EntrySource @default(manual)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId, entryDate])
+}
+
+model DailyTarget {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetDate   DateTime
+  targetCalories Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, targetDate])
+}
+
+model Reminder {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String
+  type       ReminderType
+  hour       Int
+  minute     Int
+  timezone   String
+  enabled    Boolean      @default(true)
+  lastSentAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model ParserAudit {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rawMessage    String
+  parsedPayload Json?
+  confidence    Float
+  accepted      Boolean?
+  createdAt     DateTime @default(now())
+}
