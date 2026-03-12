@@ -67,38 +67,31 @@ async function createMealEntry(
   });
 }
 
-async function showLogMenu(ctx: Context, userId: string) {
+async function getFavouritesKeyboard(userId: string) {
   const favourites = await prisma.food.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
     take: 6,
   });
 
-  const favouriteButtons = favourites.map(
-    (food: { id: string; name: string; defaultCalories: number }) =>
+  const rows = favourites.map(
+    (food: { id: string; name: string; defaultCalories: number }) => [
       Markup.button.callback(
         `${food.name} (${food.defaultCalories})`,
-        `favourite:${food.id}`,
+        `log-favourite:${food.id}`,
       ),
+    ],
   );
+  rows.push([Markup.button.callback("Cancel", "fav-cancel")]);
 
-  await ctx.reply(
-    "Send `/log <food> <kcal>`/ For example, `/log chicken rice 650`, or tap a favourite:",
-    {
-      parse_mode: "Markdown",
-      ...Markup.inlineKeyboard([
-        ...favouriteButtons.map(
-          (button: ReturnType<typeof Markup.button.callback>) => [button],
-        ),
-      ]),
-    },
-  );
+  return Markup.inlineKeyboard(rows);
 }
 
 function getHelpMessage(user: string) {
   return [
     `Hello ${user}! bui bui. Here's how you can use this bot to stop being a fatty bom bom:`,
     `/log to log a food entry for today, \n
+    /fav to choose from favourites to log, \n
     /today for your daily summary, \n
     /week for your weekly summary, \n
     /goal 2200 to set your daily target, \n
@@ -158,7 +151,23 @@ export function createTelegramBot() {
       }
     }
 
-    await showLogMenu(ctx, user.id);
+    await ctx.reply(
+      "Send `/log <food> <kcal>` — for example, `/log chicken rice 650` — or choose a favourite:",
+      {
+        parse_mode: "Markdown",
+        ...(await getFavouritesKeyboard(user.id)),
+      },
+    );
+  });
+
+  bot.command("fav", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) {
+      return;
+    }
+    await ctx.reply("Choose a favourite food entry to log ", {
+      ...(await getFavouritesKeyboard(user.id)),
+    });
   });
 
   bot.command("editlast", async (ctx) => {
@@ -344,7 +353,7 @@ export function createTelegramBot() {
     );
   });
 
-  bot.action(/favourite:(.+)/, async (ctx) => {
+  bot.action(/log-favourite:(.+)/, async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
       return;
@@ -432,7 +441,12 @@ export function createTelegramBot() {
 
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
-    await ctx.reply("Cancelled.");
+    await ctx.reply("Cancelled. Walao don't anyhow leh...");
+  });
+
+  bot.action("fav-cancel", async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply("Cancelled. Don't anyhow ah...");
   });
 
   bot.on(message("text"), async (ctx) => {
