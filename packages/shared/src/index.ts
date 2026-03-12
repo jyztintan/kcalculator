@@ -10,13 +10,13 @@ export const mealEntryCreateSchema = z.object({
   entryDate: z.string(),
   foodName: z.string().min(1),
   calories: z.number().int().positive(),
-  source: z.enum(["manual", "favorite", "parsed"]).default("manual")
+  source: z.enum(["manual", "favourite", "parsed"]).default("manual"),
 });
 
 export const foodCreateSchema = z.object({
   userId: z.string().cuid(),
   name: z.string().min(1),
-  defaultCalories: z.number().int().positive()
+  defaultCalories: z.number().int().positive(),
 });
 
 export const reminderCreateSchema = z.object({
@@ -26,7 +26,7 @@ export const reminderCreateSchema = z.object({
   hour: z.number().int().min(0).max(23),
   minute: z.number().int().min(0).max(59),
   timezone: z.string().min(1),
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(true),
 });
 
 export const parseLogResultSchema = z.object({
@@ -34,7 +34,7 @@ export const parseLogResultSchema = z.object({
   entryDate: z.string(),
   foodName: z.string().optional(),
   calories: z.number().int().positive().optional(),
-  clarification: z.string().optional()
+  clarification: z.string().optional(),
 });
 
 export type MealEntryCreateInput = z.infer<typeof mealEntryCreateSchema>;

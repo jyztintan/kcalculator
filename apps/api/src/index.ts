@@ -25,11 +25,18 @@ if (bot) {
       reply.status(200).send({ ok: true });
     });
     await bot.telegram.setWebhook(`${env.TELEGRAM_WEBHOOK_URL}/telegram/webhook`);
+    console.log("[startup] Bot webhook set");
   } else {
-    await bot.launch();
+    console.log("[startup] Starting bot (polling in background)...");
+    bot.launch().then(
+      () => console.log("[startup] Bot polling connected"),
+      (err) => console.error("[startup] Bot launch failed:", err)
+    );
   }
-
   startReminderScheduler(bot);
+  console.log("[startup] Reminder scheduler registered");
+} else {
+  console.warn("[startup] No TELEGRAM_BOT_TOKEN — bot and reminders disabled");
 }
 
 app.addHook("onClose", async () => {

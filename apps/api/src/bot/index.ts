@@ -1,9 +1,13 @@
 import type { ParseLogResult } from "@kcalculator/shared";
 import { Telegraf, Markup } from "telegraf";
+import { message } from "telegraf/filters";
 import type { Context } from "telegraf";
 import { allowedTelegramIds, env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
-import { getDashboardAnalytics, getTodaySummaryText } from "../services/analytics.js";
+import {
+  getDashboardAnalytics,
+  getTodaySummaryText,
+} from "../services/analytics.js";
 import { parseLogMessage } from "../services/parser.js";
 import { ensureUser } from "../services/users.js";
 
@@ -33,16 +37,22 @@ async function requireUser(ctx: Context) {
   return ensureUser({
     telegramId: String(from.id),
     username: from.username,
-    firstName: from.first_name
+    firstName: from.first_name,
   });
 }
 
-async function createMealEntry(userId: string, payload: ParseLogResult & { foodName: string; calories: number }) {
+async function createMealEntry(
+  userId: string,
+  payload: ParseLogResult & { foodName: string; calories: number },
+) {
   const food = await prisma.food.findFirst({
     where: {
       userId,
-      slug: payload.foodName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
-    }
+      slug: payload.foodName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, ""),
+    },
   });
 
   return prisma.mealEntry.create({
@@ -52,28 +62,51 @@ async function createMealEntry(userId: string, payload: ParseLogResult & { foodN
       entryDate: new Date(`${payload.entryDate}T00:00:00.000Z`),
       foodName: payload.foodName,
       calories: payload.calories,
-      source: "parsed"
-    }
+      source: "parsed",
+    },
   });
 }
 
 async function showLogMenu(ctx: Context, userId: string) {
-  const favorites = await prisma.food.findMany({
+  const favourites = await prisma.food.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
-    take: 6
+    take: 6,
   });
 
-  const favoriteButtons = favorites.map((food: { id: string; name: string; defaultCalories: number }) =>
-    Markup.button.callback(`${food.name} (${food.defaultCalories})`, `favorite:${food.id}`)
+  const favouriteButtons = favourites.map(
+    (food: { id: string; name: string; defaultCalories: number }) =>
+      Markup.button.callback(
+        `${food.name} (${food.defaultCalories})`,
+        `favourite:${food.id}`,
+      ),
   );
 
   await ctx.reply(
-    "Send `food kcal` like `chicken rice 650`, or tap a favorite.",
-    Markup.inlineKeyboard([
-      ...favoriteButtons.map((button: ReturnType<typeof Markup.button.callback>) => [button])
-    ])
+    "Send `/log <food> <kcal>`/ For example, `/log chicken rice 650`, or tap a favourite:",
+    {
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        ...favouriteButtons.map(
+          (button: ReturnType<typeof Markup.button.callback>) => [button],
+        ),
+      ]),
+    },
   );
+}
+
+function getHelpMessage(user: string) {
+  return [
+    `Hello ${user}! bui bui. Here's how you can use this bot to stop being a fatty bom bom:`,
+    `/log to log a food entry for today, \n
+    /today for your daily summary, \n
+    /week for your weekly summary, \n
+    /goal 2200 to set your daily target, \n
+    /reminders to view your reminders, \n
+    /reminders add <name> <hour>:<minute> to add a reminder, \n
+    /editlast to edit the most recent entry calories, \n
+    /help to show this message again.`,
+  ].join("\n");
 }
 
 export function createTelegramBot() {
@@ -89,12 +122,16 @@ export function createTelegramBot() {
       return;
     }
 
-    await ctx.reply(
-      [
-        `Hello ${user.firstName ?? "there"}!`,
-        "Use /log to add food, /today for your summary, /week for recent adherence, /goal 2200 to set today's target, and /reminders to view reminders."
-      ].join("\n")
-    );
+    await ctx.reply(getHelpMessage(user.firstName ?? "there"));
+  });
+
+  bot.command("help", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) {
+      return;
+    }
+
+    await ctx.reply(getHelpMessage(user.firstName ?? "there"));
   });
 
   bot.command("log", async (ctx) => {
@@ -113,9 +150,9 @@ export function createTelegramBot() {
           Markup.inlineKeyboard([
             [
               Markup.button.callback("Save", "parse-confirm"),
-              Markup.button.callback("Cancel", "parse-reject")
-            ]
-          ])
+              Markup.button.callback("Cancel", "parse-reject"),
+            ],
+          ]),
         );
         return;
       }
@@ -181,8 +218,8 @@ export function createTelegramBot() {
         `Hit days: ${analytics.summary.hitDays}`,
         `Missed days: ${analytics.summary.missedDays}`,
         `Avg calories: ${analytics.summary.weeklyAverage}`,
-        `Adherence: ${(analytics.summary.adherenceRate * 100).toFixed(0)}%`
-      ].join("\n")
+        `Adherence: ${(analytics.summary.adherenceRate * 100).toFixed(0)}%`,
+      ].join("\n"),
     );
   });
 
@@ -195,14 +232,14 @@ export function createTelegramBot() {
     const match = ctx.message.text.match(/\/goal(@\w+)?\s+(\d{3,5})/);
     if (!match) {
       await ctx.reply("Use `/goal 2200` to modify your daily calorie target.", {
-        parse_mode: "Markdown"
+        parse_mode: "Markdown",
       });
       return;
     }
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { defaultCalorieTarget: Number(match[2]) }
+      data: { defaultCalorieTarget: Number(match[2]) },
     });
 
     await ctx.reply(`Your daily target is now ${match[2]} kcal.`);
@@ -214,7 +251,9 @@ export function createTelegramBot() {
       return;
     }
 
-    const match = ctx.message.text.match(/^\/reminders\s+add\s+(.+)\s+(\d{1,2}):(\d{2})$/i);
+    const match = ctx.message.text.match(
+      /^\/reminders\s+add\s+(.+)\s+(\d{1,2}):(\d{2})$/i,
+    );
     if (!match) {
       return;
     }
@@ -226,11 +265,13 @@ export function createTelegramBot() {
         type: "log_meal",
         hour: Number(match[2]),
         minute: Number(match[3]),
-        timezone: user.timezone
-      }
+        timezone: user.timezone,
+      },
     });
 
-    await ctx.reply(`Reminder created for ${match[1]} at ${match[2]}:${match[3]}.`);
+    await ctx.reply(
+      `Reminder created for ${match[1]} at ${match[2]}:${match[3]}.`,
+    );
   });
 
   bot.command("reminders", async (ctx) => {
@@ -241,19 +282,19 @@ export function createTelegramBot() {
 
     const reminders = await prisma.reminder.findMany({
       where: { userId: user.id },
-      orderBy: [{ hour: "asc" }, { minute: "asc" }]
+      orderBy: [{ hour: "asc" }, { minute: "asc" }],
     });
 
     if (reminders.length === 0) {
       await ctx.reply("No reminders yet. Use `/reminders add lunch 12:30`.", {
-        parse_mode: "Markdown"
+        parse_mode: "Markdown",
       });
       return;
     }
 
     const lines = reminders.map(
       (reminder: { label: string; hour: number; minute: number }) =>
-        `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`
+        `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`,
     );
 
     await ctx.reply(lines.join("\n"));
@@ -262,14 +303,19 @@ export function createTelegramBot() {
       "Tap a reminder to delete it:",
       Markup.inlineKeyboard(
         reminders.map(
-          (reminder: { id: string; label: string; hour: number; minute: number }) => [
+          (reminder: {
+            id: string;
+            label: string;
+            hour: number;
+            minute: number;
+          }) => [
             Markup.button.callback(
               `${reminder.label} ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`,
-              `reminder-delete:${reminder.id}`
-            )
-          ]
-        )
-      )
+              `reminder-delete:${reminder.id}`,
+            ),
+          ],
+        ),
+      ),
     );
   });
 
@@ -281,7 +327,7 @@ export function createTelegramBot() {
 
     const reminderId = ctx.match[1];
     const reminder = await prisma.reminder.findFirst({
-      where: { id: reminderId, userId: user.id }
+      where: { id: reminderId, userId: user.id },
     });
 
     if (!reminder) {
@@ -293,12 +339,12 @@ export function createTelegramBot() {
     await ctx.answerCbQuery("Deleted");
     await ctx.reply(
       `Deleted reminder: ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(
-        reminder.minute
-      ).padStart(2, "0")}`
+        reminder.minute,
+      ).padStart(2, "0")}`,
     );
   });
 
-  bot.action(/favorite:(.+)/, async (ctx) => {
+  bot.action(/favourite:(.+)/, async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
       return;
@@ -306,7 +352,7 @@ export function createTelegramBot() {
 
     const food = await prisma.food.findUnique({ where: { id: ctx.match[1] } });
     if (!food) {
-      await ctx.answerCbQuery("Favorite not found");
+      await ctx.answerCbQuery("favourite not found");
       return;
     }
 
@@ -314,11 +360,13 @@ export function createTelegramBot() {
       data: {
         userId: user.id,
         foodId: food.id,
-        entryDate: new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`),
+        entryDate: new Date(
+          `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+        ),
         foodName: food.name,
         calories: food.defaultCalories,
-        source: "favorite"
-      }
+        source: "favourite",
+      },
     });
 
     await ctx.answerCbQuery();
@@ -345,7 +393,7 @@ export function createTelegramBot() {
     await createMealEntry(user.id, {
       ...session.payload,
       foodName: session.payload.foodName,
-      calories: session.payload.calories
+      calories: session.payload.calories,
     });
 
     await prisma.parserAudit.create({
@@ -354,8 +402,8 @@ export function createTelegramBot() {
         rawMessage: "telegram-natural-language",
         parsedPayload: session.payload,
         confidence: session.payload.confidence,
-        accepted: true
-      }
+        accepted: true,
+      },
     });
 
     sessions.delete(ctx.chat!.id);
@@ -377,8 +425,8 @@ export function createTelegramBot() {
           rawMessage: "telegram-natural-language",
           parsedPayload: session.payload,
           confidence: session.payload.confidence,
-          accepted: false
-        }
+          accepted: false,
+        },
       });
     }
 
@@ -387,7 +435,7 @@ export function createTelegramBot() {
     await ctx.reply("Cancelled.");
   });
 
-  bot.on("text", async (ctx) => {
+  bot.on(message("text"), async (ctx) => {
     if (ctx.message.text.startsWith("/")) {
       return;
     }
@@ -404,14 +452,14 @@ export function createTelegramBot() {
         rawMessage: ctx.message.text,
         parsedPayload: parsed,
         confidence: parsed.confidence,
-        accepted: null
-      }
+        accepted: null,
+      },
     });
 
     if (!parsed.foodName || !parsed.calories || parsed.confidence < 0.7) {
       await ctx.reply(
         "I could not confidently parse that. Please include a food name and calories, like `chicken rice 650`.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
       return;
     }
@@ -422,9 +470,9 @@ export function createTelegramBot() {
       Markup.inlineKeyboard([
         [
           Markup.button.callback("Save", "parse-confirm"),
-          Markup.button.callback("Cancel", "parse-reject")
-        ]
-      ])
+          Markup.button.callback("Cancel", "parse-reject"),
+        ],
+      ]),
     );
   });
 

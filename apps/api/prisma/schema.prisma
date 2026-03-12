@@ -15,7 +15,7 @@ enum ReminderType {
 
 enum EntrySource {
   manual
-  favorite
+  favourite
   parsed
 }
 
