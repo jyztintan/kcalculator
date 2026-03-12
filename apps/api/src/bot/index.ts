@@ -241,27 +241,63 @@ export function createTelegramBot() {
 
     const reminders = await prisma.reminder.findMany({
       where: { userId: user.id },
-      orderBy: [{ hour: "asc" }, { minute: "asc" }],
+      orderBy: [{ hour: "asc" }, { minute: "asc" }]
     });
 
     if (reminders.length === 0) {
       await ctx.reply("No reminders yet. Use `/reminders add lunch 12:30`.", {
-        parse_mode: "Markdown",
+        parse_mode: "Markdown"
       });
       return;
     }
 
+    const lines = reminders.map(
+      (reminder: { label: string; hour: number; minute: number }) =>
+        `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`
+    );
+
+    await ctx.reply(lines.join("\n"));
+
     await ctx.reply(
-      reminders
-        .map(
-          (reminder: { label: string; hour: number; minute: number }) =>
-            `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`,
+      "Tap a reminder to delete it:",
+      Markup.inlineKeyboard(
+        reminders.map(
+          (reminder: { id: string; label: string; hour: number; minute: number }) => [
+            Markup.button.callback(
+              `${reminder.label} ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`,
+              `reminder-delete:${reminder.id}`
+            )
+          ]
         )
-        .join("\n"),
+      )
     );
   });
 
-  
+  bot.action(/reminder-delete:(.+)/, async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) {
+      return;
+    }
+
+    const reminderId = ctx.match[1];
+    const reminder = await prisma.reminder.findFirst({
+      where: { id: reminderId, userId: user.id }
+    });
+
+    if (!reminder) {
+      await ctx.answerCbQuery("Reminder not found");
+      return;
+    }
+
+    await prisma.reminder.delete({ where: { id: reminder.id } });
+    await ctx.answerCbQuery("Deleted");
+    await ctx.reply(
+      `Deleted reminder: ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(
+        reminder.minute
+      ).padStart(2, "0")}`
+    );
+  });
+
   bot.action(/favorite:(.+)/, async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
