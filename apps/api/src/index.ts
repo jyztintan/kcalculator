@@ -19,6 +19,24 @@ await registerRoutes(app);
 const bot = createTelegramBot();
 
 if (bot) {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "log", description: "Log a food entry (or free-text parse)" },
+      { command: "fav", description: "Choose a favourite to log" },
+      { command: "addfav", description: "Add a favourite (food + calories)" },
+      { command: "today", description: "Show today’s summary" },
+      { command: "week", description: "Show this week’s summary" },
+      { command: "stats", description: "Dashboard link + longer stats" },
+      { command: "goal", description: "Set daily calorie target" },
+      { command: "reminders", description: "List / add / delete reminders" },
+      { command: "editlast", description: "Edit the most recent entry calories" },
+      { command: "help", description: "Show help" },
+    ]);
+    console.log("[startup] Bot commands registered");
+  } catch (err) {
+    console.warn("[startup] Failed to register bot commands:", err);
+  }
+
   if (env.TELEGRAM_USE_WEBHOOK && env.TELEGRAM_WEBHOOK_URL) {
     app.post("/telegram/webhook", async (request, reply) => {
       await bot.handleUpdate(request.body as never, reply.raw);

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { foodCreateSchema, mealEntryCreateSchema, reminderCreateSchema } from "@kcalculator/shared";
 import { prisma } from "../lib/prisma.js";
+import { env } from "../config/env.js";
 import { getDashboardAnalytics } from "../services/analytics.js";
+import { verifyDashboardToken } from "../services/dashboard-token.js";
 import { ensureUser, getUserByTelegramId, resolveDefaultUser } from "../services/users.js";
 
 function slugify(value: string) {
@@ -133,12 +135,19 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/dashboard", async (request) => {
-    const query = request.query as { telegramId?: string; days?: string };
+    const query = request.query as { telegramId?: string; token?: string; days?: string };
     const days = Number(query.days ?? 90);
 
-    const user = query.telegramId
-      ? await getUserByTelegramId(query.telegramId)
-      : await resolveDefaultUser();
+    const telegramIdFromToken =
+      query.token && env.DASHBOARD_TOKEN_SECRET
+        ? verifyDashboardToken({ token: query.token, secret: env.DASHBOARD_TOKEN_SECRET })?.telegramId
+        : null;
+
+    const user = telegramIdFromToken
+      ? await getUserByTelegramId(telegramIdFromToken)
+      : query.telegramId
+        ? await getUserByTelegramId(query.telegramId)
+        : await resolveDefaultUser();
 
     if (!user) {
       return {

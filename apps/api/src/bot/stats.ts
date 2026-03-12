@@ -1,11 +1,20 @@
 import type { Context } from "telegraf";
 import type { Telegraf } from "telegraf";
+import { Markup } from "telegraf";
 import { prisma } from "../lib/prisma.js";
-import { getDashboardAnalytics, getTodaySummaryText } from "../services/analytics.js";
+import { env } from "../config/env.js";
+import {
+  getDashboardAnalytics,
+  getTodaySummaryText,
+} from "../services/analytics.js";
+import { issueDashboardToken } from "../services/dashboard-token.js";
 
 type RequireUser = (ctx: Context) => Promise<{ id: string } | null>;
 
-export function registerStatsCommands(bot: Telegraf<Context>, requireUser: RequireUser) {
+export function registerStatsCommands(
+  bot: Telegraf<Context>,
+  requireUser: RequireUser,
+) {
   bot.command("today", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
@@ -48,5 +57,48 @@ export function registerStatsCommands(bot: Telegraf<Context>, requireUser: Requi
 
     await ctx.reply(`Your daily target is now ${match[2]} kcal.`);
   });
-}
 
+  bot.command("stats", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    const analytics = await getDashboardAnalytics({
+      userId: user.id,
+      days: 100,
+    });
+
+    const dashboardUrl = env.DASHBOARD_PUBLIC_URL?.trim();
+
+    if (!dashboardUrl) {
+      await ctx.reply(
+        [
+          "Dashboard link not configured.",
+          "Set `DASHBOARD_PUBLIC_URL` in your API env.",
+          "",
+          `Stats: ${analytics.summary.trackedDays} tracked days, avg ${analytics.summary.weeklyAverage} kcal`,
+        ].join("\n"),
+      );
+      return;
+    }
+
+    const telegramId = String(ctx.from?.id ?? "");
+    if (!telegramId) {
+      await ctx.reply(
+        "Could not determine your Telegram ID for dashboard auth.",
+      );
+      return;
+    }
+
+    const token = issueDashboardToken({
+      telegramId,
+      expiresInSeconds: 60 * 60 * 24 * 7, // 7 days
+    });
+
+    const url = new URL(dashboardUrl);
+    url.searchParams.set("token", token);
+
+    await ctx.reply("Dashboard:", Markup.inlineKeyboard([
+      [Markup.button.url("Open dashboard", url.toString())],
+    ]));
+  });
+}

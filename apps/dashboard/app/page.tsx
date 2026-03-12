@@ -3,8 +3,17 @@ import { SummaryCard } from "@/components/summary-card";
 import { TrendChart } from "@/components/trend-chart";
 import { fetchDashboard } from "@/lib/api";
 
-export default async function DashboardPage() {
-  const data = await fetchDashboard(90, process.env.DEFAULT_DASHBOARD_TELEGRAM_ID);
+export default async function DashboardPage(props: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const searchParams = props.searchParams ? await props.searchParams : undefined;
+  const tokenParam = searchParams?.token;
+  const token = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam;
+
+  const data = await fetchDashboard(90, {
+    token,
+    telegramId: token ? undefined : process.env.DEFAULT_DASHBOARD_TELEGRAM_ID,
+  });
 
   return (
     <main className="page-shell">

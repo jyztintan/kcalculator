@@ -128,13 +128,43 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
 }
 
 export async function getTodaySummaryText(userId: string) {
-  const analytics = await getDashboardAnalytics({ userId, days: 7 });
+  const today = startOfDay(new Date());
+  const tomorrow = addDays(today, 1);
+
+  const [analytics, entries] = await Promise.all([
+    getDashboardAnalytics({ userId, days: 7 }),
+    prisma.mealEntry.findMany({
+      where: {
+        userId,
+        entryDate: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        foodName: true,
+        calories: true,
+      },
+    }),
+  ]);
   const summary = analytics.summary;
 
+  const linesToday =
+    entries.length === 0
+      ? ["(no entries yet)"]
+      : entries.map(
+          (e: { foodName: string; calories: number }) =>
+            `- ${e.foodName} (${e.calories} kcal)`,
+        );
+
   return [
+    "Logged today:",
+    ...linesToday,
+    "",
     `Today: ${summary.todayCalories}/${summary.todayTarget} kcal`,
     `Remaining: ${summary.todayRemaining} kcal`,
     `7-day avg: ${summary.weeklyAverage} kcal`,
-    `Hit days: ${summary.hitDays}, Missed days: ${summary.missedDays}`
+    `Hit days: ${summary.hitDays}, Missed days: ${summary.missedDays}`,
   ].join("\n");
 }

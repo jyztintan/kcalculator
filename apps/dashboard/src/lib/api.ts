@@ -27,11 +27,16 @@ export type DashboardPayload = {
   }>;
 };
 
-export async function fetchDashboard(days = 90, telegramId?: string): Promise<DashboardPayload> {
+export async function fetchDashboard(
+  days = 90,
+  options: { telegramId?: string; token?: string } = {},
+): Promise<DashboardPayload> {
   const url = new URL("/dashboard", apiBaseUrl);
   url.searchParams.set("days", String(days));
-  if (telegramId) {
-    url.searchParams.set("telegramId", telegramId);
+  if (options.token) {
+    url.searchParams.set("token", options.token);
+  } else if (options.telegramId) {
+    url.searchParams.set("telegramId", options.telegramId);
   }
 
   const response = await fetch(url.toString(), {
