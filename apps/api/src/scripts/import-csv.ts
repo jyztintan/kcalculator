@@ -56,7 +56,6 @@ async function main() {
     const rawFood = pick(row, ["food", "meal", "item"]);
     const rawCalories = pick(row, ["calories", "kcal"]);
     const rawTarget = pick(row, ["target", "daily target"]);
-    const rawMealType = pick(row, ["meal type", "mealtype"]);
 
     if (!rawDate || !rawCalories) {
       continue;
@@ -74,13 +73,6 @@ async function main() {
         data: {
           userId: user.id,
           entryDate,
-          mealType:
-            rawMealType === "breakfast" ||
-            rawMealType === "lunch" ||
-            rawMealType === "dinner" ||
-            rawMealType === "snack"
-              ? rawMealType
-              : "snack",
           foodName: rawFood,
           calories,
           source: "manual"

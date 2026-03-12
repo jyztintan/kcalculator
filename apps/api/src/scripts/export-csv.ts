@@ -35,19 +35,16 @@ async function main() {
   await mkdir(outputDir, { recursive: true });
 
   const entriesCsv = stringify(
-    entries.map((entry) => ({
+    entries.map((entry: { entryDate: Date; foodName: string; calories: number }) => ({
       date: entry.entryDate.toISOString().slice(0, 10),
-      mealType: entry.mealType,
       food: entry.foodName,
       calories: entry.calories,
-      quantity: entry.quantity ?? "",
-      notes: entry.notes ?? ""
     })),
     { header: true }
   );
 
   const targetsCsv = stringify(
-    targets.map((target) => ({
+    targets.map((target: { targetDate: Date; targetCalories: number }) => ({
       date: target.targetDate.toISOString().slice(0, 10),
       targetCalories: target.targetCalories
     })),

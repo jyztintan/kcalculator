@@ -1,4 +1,4 @@
-import type { MealType, ParseLogResult } from "@kcalculator/shared";
+import type { ParseLogResult } from "@kcalculator/shared";
 import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
 import { allowedTelegramIds, env } from "../config/env.js";
@@ -7,15 +7,10 @@ import { getDashboardAnalytics, getTodaySummaryText } from "../services/analytic
 import { parseLogMessage } from "../services/parser.js";
 import { ensureUser } from "../services/users.js";
 
-type SessionState =
-  | {
-      kind: "structured";
-      mealType: MealType;
-    }
-  | {
-      kind: "parse-confirm";
-      payload: ParseLogResult;
-    };
+type SessionState = {
+  kind: "parse-confirm";
+  payload: ParseLogResult;
+};
 
 const sessions = new Map<number, SessionState>();
 
@@ -46,7 +41,7 @@ async function requireUser(ctx: Context) {
   });
 }
 
-async function createMealEntry(userId: string, payload: ParseLogResult & { mealType: MealType; foodName: string; calories: number }) {
+async function createMealEntry(userId: string, payload: ParseLogResult & { foodName: string; calories: number }) {
   const food = await prisma.food.findFirst({
     where: {
       userId,
@@ -59,11 +54,8 @@ async function createMealEntry(userId: string, payload: ParseLogResult & { mealT
       userId,
       foodId: food?.id,
       entryDate: new Date(`${payload.entryDate}T00:00:00.000Z`),
-      mealType: payload.mealType,
       foodName: payload.foodName,
       calories: payload.calories,
-      quantity: payload.quantity,
-      notes: payload.notes,
       source: "parsed"
     }
   });
@@ -76,19 +68,14 @@ async function showLogMenu(ctx: Context, userId: string) {
     take: 6
   });
 
-  const mealButtons = (["breakfast", "lunch", "dinner", "snack"] as MealType[]).map((mealType) =>
-    Markup.button.callback(mealType, `log-meal:${mealType}`)
-  );
-
-  const favoriteButtons = favorites.map((food) =>
+  const favoriteButtons = favorites.map((food: { id: string; name: string; defaultCalories: number }) =>
     Markup.button.callback(`${food.name} (${food.defaultCalories})`, `favorite:${food.id}`)
   );
 
   await ctx.reply(
-    "Choose a meal type, then send `food kcal` like `chicken rice 650`, or tap a favorite.",
+    "Send `food kcal` like `chicken rice 650`, or tap a favorite.",
     Markup.inlineKeyboard([
-      mealButtons,
-      ...favoriteButtons.map((button) => [button])
+      ...favoriteButtons.map((button: ReturnType<typeof Markup.button.callback>) => [button])
     ])
   );
 }
@@ -123,10 +110,10 @@ export function createTelegramBot() {
     const args = ctx.message.text.replace(/^\/log(@\w+)?\s*/, "").trim();
     if (args) {
       const parsed = await parseLogMessage(args);
-      if (parsed.foodName && parsed.calories && parsed.mealType) {
+      if (parsed.foodName && parsed.calories) {
         sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
         await ctx.reply(
-          `Confirm log: ${parsed.mealType} - ${parsed.foodName} - ${parsed.calories} kcal`,
+          `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
           Markup.inlineKeyboard([
             [
               Markup.button.callback("Save", "parse-confirm"),
@@ -222,7 +209,7 @@ export function createTelegramBot() {
 
     await ctx.reply(
       reminders
-        .map((reminder) => `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`)
+        .map((reminder: { label: string; hour: number; minute: number }) => `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`)
         .join("\n")
     );
   });
@@ -284,20 +271,6 @@ export function createTelegramBot() {
     await ctx.reply(`Updated ${lastEntry.foodName} to ${match[2]} kcal.`);
   });
 
-  bot.action(/log-meal:(.+)/, async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) {
-      return;
-    }
-
-    const mealType = ctx.match[1] as MealType;
-    sessions.set(ctx.chat!.id, { kind: "structured", mealType });
-    await ctx.answerCbQuery();
-    await ctx.reply(`Meal type set to ${mealType}. Send \`food kcal\` now, for example \`protein oats 420\`.`, {
-      parse_mode: "Markdown"
-    });
-  });
-
   bot.action(/favorite:(.+)/, async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
@@ -315,7 +288,6 @@ export function createTelegramBot() {
         userId: user.id,
         foodId: food.id,
         entryDate: new Date(`${dateKey()}T00:00:00.000Z`),
-        mealType: food.defaultMealType ?? "snack",
         foodName: food.name,
         calories: food.defaultCalories,
         source: "favorite"
@@ -338,7 +310,7 @@ export function createTelegramBot() {
       return;
     }
 
-    if (!session.payload.foodName || !session.payload.calories || !session.payload.mealType) {
+    if (!session.payload.foodName || !session.payload.calories) {
       await ctx.answerCbQuery("Missing parsed fields");
       return;
     }
@@ -346,8 +318,7 @@ export function createTelegramBot() {
     await createMealEntry(user.id, {
       ...session.payload,
       foodName: session.payload.foodName,
-      calories: session.payload.calories,
-      mealType: session.payload.mealType
+      calories: session.payload.calories
     });
 
     await prisma.parserAudit.create({
@@ -386,7 +357,7 @@ export function createTelegramBot() {
 
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
-    await ctx.reply("Cancelled. Use /log for the structured flow.");
+    await ctx.reply("Cancelled.");
   });
 
   bot.on("text", async (ctx) => {
@@ -396,32 +367,6 @@ export function createTelegramBot() {
 
     const user = await requireUser(ctx);
     if (!user) {
-      return;
-    }
-
-    const session = sessions.get(ctx.chat.id);
-    if (session?.kind === "structured") {
-      const match = ctx.message.text.trim().match(/(.+)\s+(\d{2,5})$/);
-      if (!match) {
-        await ctx.reply("Please send the entry as `food kcal`, for example `chicken rice 650`.", {
-          parse_mode: "Markdown"
-        });
-        return;
-      }
-
-      await prisma.mealEntry.create({
-        data: {
-          userId: user.id,
-          entryDate: new Date(`${dateKey()}T00:00:00.000Z`),
-          mealType: session.mealType,
-          foodName: match[1].trim(),
-          calories: Number(match[2]),
-          source: "manual"
-        }
-      });
-
-      sessions.delete(ctx.chat.id);
-      await ctx.reply(`Logged ${match[1].trim()} for ${match[2]} kcal.`);
       return;
     }
 
@@ -436,9 +381,9 @@ export function createTelegramBot() {
       }
     });
 
-    if (!parsed.foodName || !parsed.calories || !parsed.mealType || parsed.confidence < 0.7) {
+    if (!parsed.foodName || !parsed.calories || parsed.confidence < 0.7) {
       await ctx.reply(
-        "I could not confidently parse that. Use /log for the structured flow, or include a meal and calories, like `lunch chicken rice 650`.",
+        "I could not confidently parse that. Please include a food name and calories, like `chicken rice 650`.",
         { parse_mode: "Markdown" }
       );
       return;
@@ -446,7 +391,7 @@ export function createTelegramBot() {
 
     sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
     await ctx.reply(
-      `I parsed: ${parsed.mealType} - ${parsed.foodName} - ${parsed.calories} kcal. Save it?`,
+      `I parsed: ${parsed.foodName} - ${parsed.calories} kcal. Save it?`,
       Markup.inlineKeyboard([
         [
           Markup.button.callback("Save", "parse-confirm"),

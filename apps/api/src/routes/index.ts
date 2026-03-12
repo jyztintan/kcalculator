@@ -50,15 +50,13 @@ export async function registerRoutes(app: FastifyInstance) {
         }
       },
       update: {
-        defaultCalories: body.defaultCalories,
-        defaultMealType: body.defaultMealType
+        defaultCalories: body.defaultCalories
       },
       create: {
         userId: body.userId,
         name: body.name,
         slug: slugify(body.name),
-        defaultCalories: body.defaultCalories,
-        defaultMealType: body.defaultMealType
+        defaultCalories: body.defaultCalories
       }
     });
 
@@ -99,12 +97,9 @@ export async function registerRoutes(app: FastifyInstance) {
         userId: body.userId,
         foodId: food?.id,
         entryDate: toDate(body.entryDate),
-        mealType: body.mealType,
         foodName: body.foodName,
         calories: body.calories,
-        quantity: body.quantity,
         source: body.source,
-        notes: body.notes
       }
     });
 
@@ -114,8 +109,7 @@ export async function registerRoutes(app: FastifyInstance) {
           userId: body.userId,
           name: body.foodName,
           slug: slugify(body.foodName),
-          defaultCalories: body.calories,
-          defaultMealType: body.mealType
+          defaultCalories: body.calories
         }
       });
     }
@@ -128,9 +122,6 @@ export async function registerRoutes(app: FastifyInstance) {
     const body = request.body as Partial<{
       calories: number;
       foodName: string;
-      mealType: "breakfast" | "lunch" | "dinner" | "snack";
-      quantity: string;
-      notes: string;
     }>;
 
     const entry = await prisma.mealEntry.update({

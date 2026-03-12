@@ -24,14 +24,12 @@ async function main() {
     },
     update: {
       defaultCalories: 115,
-      defaultMealType: "snack"
     },
     create: {
       userId: user.id,
       name: "protein",
       slug: "protein",
-      defaultCalories: 115,
-      defaultMealType: "snack"
+      defaultCalories: 115
     }
   });
 
