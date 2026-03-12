@@ -7,13 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum MealType {
-  breakfast
-  lunch
-  dinner
-  snack
-}
-
 enum ReminderType {
   log_meal
   weigh_in
@@ -49,8 +42,6 @@ model Food {
   name             String
   slug             String
   defaultCalories  Int
-  defaultMealType  MealType?
-  isFavorite       Boolean    @default(true)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   mealEntries      MealEntry[]
@@ -65,7 +56,6 @@ model MealEntry {
   foodId      String?
   food        Food?       @relation(fields: [foodId], references: [id], onDelete: SetNull)
   entryDate   DateTime
-  mealType    MealType
   foodName    String
   calories    Int
   quantity    String?

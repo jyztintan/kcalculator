@@ -5,7 +5,7 @@ import { allowedTelegramIds, env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { getDashboardAnalytics, getTodaySummaryText } from "../services/analytics.js";
 import { parseLogMessage } from "../services/parser.js";
-import { ensureUser, getUserByTelegramId } from "../services/users.js";
+import { ensureUser } from "../services/users.js";
 
 type SessionState =
   | {
@@ -20,7 +20,7 @@ type SessionState =
 const sessions = new Map<number, SessionState>();
 
 function isAllowedUser(telegramId: string) {
-  return allowedTelegramIds.size === 0 || allowedTelegramIds.has(telegramId);
+  return allowedTelegramIds.has(telegramId);
 }
 
 function dateKey() {
@@ -33,6 +33,7 @@ async function requireUser(ctx: Context) {
     return null;
   }
 
+  // can deprecate this if going public
   if (!isAllowedUser(String(from.id))) {
     await ctx.reply("This bot is currently restricted to approved users only.");
     return null;
@@ -70,7 +71,7 @@ async function createMealEntry(userId: string, payload: ParseLogResult & { mealT
 
 async function showLogMenu(ctx: Context, userId: string) {
   const favorites = await prisma.food.findMany({
-    where: { userId, isFavorite: true },
+    where: { userId },
     orderBy: { updatedAt: "desc" },
     take: 6
   });

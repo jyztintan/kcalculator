@@ -35,7 +35,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const foods = await prisma.food.findMany({
       where: { userId: user.id },
-      orderBy: [{ isFavorite: "desc" }, { name: "asc" }]
     });
 
     return { foods };
