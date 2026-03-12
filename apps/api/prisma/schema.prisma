@@ -31,7 +31,6 @@ model User {
   foods                 Food[]
   mealEntries           MealEntry[]
   reminders             Reminder[]
-  dailyTargets          DailyTarget[]
   parserAudits          ParserAudit[]
 }
 
@@ -63,18 +62,6 @@ model MealEntry {
   updatedAt   DateTime    @updatedAt
 
   @@index([userId, entryDate])
-}
-
-model DailyTarget {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  targetDate   DateTime
-  targetCalories Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([userId, targetDate])
 }
 
 model Reminder {

@@ -18,10 +18,6 @@ function isAllowedUser(telegramId: string) {
   return allowedTelegramIds.has(telegramId);
 }
 
-function dateKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 async function requireUser(ctx: Context) {
   const from = ctx.from;
   if (!from) {
@@ -128,6 +124,41 @@ export function createTelegramBot() {
     await showLogMenu(ctx, user.id);
   });
 
+  bot.command("editlast", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) {
+      return;
+    }
+
+    const match = ctx.message.text.match(/\/editlast(@\w+)?\s+(\d{2,5})/);
+    if (!match) {
+      await ctx.reply(
+        "Use `/editlast 650` to update the most recent entry calories.",
+        {
+          parse_mode: "Markdown",
+        },
+      );
+      return;
+    }
+
+    const lastEntry = await prisma.mealEntry.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!lastEntry) {
+      await ctx.reply("No entries found yet.");
+      return;
+    }
+
+    await prisma.mealEntry.update({
+      where: { id: lastEntry.id },
+      data: { calories: Number(match[2]) },
+    });
+
+    await ctx.reply(`Updated ${lastEntry.foodName} to ${match[2]} kcal.`);
+  });
+
   bot.command("today", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
@@ -163,55 +194,18 @@ export function createTelegramBot() {
 
     const match = ctx.message.text.match(/\/goal(@\w+)?\s+(\d{3,5})/);
     if (!match) {
-      await ctx.reply("Use `/goal 2200` to set today's calorie target.", {
+      await ctx.reply("Use `/goal 2200` to modify your daily calorie target.", {
         parse_mode: "Markdown"
       });
       return;
     }
 
-    await prisma.dailyTarget.upsert({
-      where: {
-        userId_targetDate: {
-          userId: user.id,
-          targetDate: new Date(`${dateKey()}T00:00:00.000Z`)
-        }
-      },
-      update: {
-        targetCalories: Number(match[2])
-      },
-      create: {
-        userId: user.id,
-        targetDate: new Date(`${dateKey()}T00:00:00.000Z`),
-        targetCalories: Number(match[2])
-      }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { defaultCalorieTarget: Number(match[2]) }
     });
 
-    await ctx.reply(`Today's target is now ${match[2]} kcal.`);
-  });
-
-  bot.command("reminders", async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) {
-      return;
-    }
-
-    const reminders = await prisma.reminder.findMany({
-      where: { userId: user.id },
-      orderBy: [{ hour: "asc" }, { minute: "asc" }]
-    });
-
-    if (reminders.length === 0) {
-      await ctx.reply("No reminders yet. Use `/reminders add lunch 12:30`.", {
-        parse_mode: "Markdown"
-      });
-      return;
-    }
-
-    await ctx.reply(
-      reminders
-        .map((reminder: { label: string; hour: number; minute: number }) => `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`)
-        .join("\n")
-    );
+    await ctx.reply(`Your daily target is now ${match[2]} kcal.`);
   });
 
   bot.hears(/^\/reminders\s+add\s+(.+)\s+(\d{1,2}):(\d{2})$/i, async (ctx) => {
@@ -239,38 +233,35 @@ export function createTelegramBot() {
     await ctx.reply(`Reminder created for ${match[1]} at ${match[2]}:${match[3]}.`);
   });
 
-  bot.command("editlast", async (ctx) => {
+  bot.command("reminders", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
       return;
     }
 
-    const match = ctx.message.text.match(/\/editlast(@\w+)?\s+(\d{2,5})/);
-    if (!match) {
-      await ctx.reply("Use `/editlast 650` to update the most recent entry calories.", {
-        parse_mode: "Markdown"
+    const reminders = await prisma.reminder.findMany({
+      where: { userId: user.id },
+      orderBy: [{ hour: "asc" }, { minute: "asc" }],
+    });
+
+    if (reminders.length === 0) {
+      await ctx.reply("No reminders yet. Use `/reminders add lunch 12:30`.", {
+        parse_mode: "Markdown",
       });
       return;
     }
 
-    const lastEntry = await prisma.mealEntry.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" }
-    });
-
-    if (!lastEntry) {
-      await ctx.reply("No entries found yet.");
-      return;
-    }
-
-    await prisma.mealEntry.update({
-      where: { id: lastEntry.id },
-      data: { calories: Number(match[2]) }
-    });
-
-    await ctx.reply(`Updated ${lastEntry.foodName} to ${match[2]} kcal.`);
+    await ctx.reply(
+      reminders
+        .map(
+          (reminder: { label: string; hour: number; minute: number }) =>
+            `- ${reminder.label} at ${String(reminder.hour).padStart(2, "0")}:${String(reminder.minute).padStart(2, "0")}`,
+        )
+        .join("\n"),
+    );
   });
 
+  
   bot.action(/favorite:(.+)/, async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) {
@@ -287,7 +278,7 @@ export function createTelegramBot() {
       data: {
         userId: user.id,
         foodId: food.id,
-        entryDate: new Date(`${dateKey()}T00:00:00.000Z`),
+        entryDate: new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`),
         foodName: food.name,
         calories: food.defaultCalories,
         source: "favorite"

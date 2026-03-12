@@ -55,7 +55,6 @@ async function main() {
     const rawDate = pick(row, ["date", "date (present)", "date (prisine)"]);
     const rawFood = pick(row, ["food", "meal", "item"]);
     const rawCalories = pick(row, ["calories", "kcal"]);
-    const rawTarget = pick(row, ["target", "daily target"]);
 
     if (!rawDate || !rawCalories) {
       continue;
@@ -80,27 +79,6 @@ async function main() {
       });
     }
 
-    if (rawTarget) {
-      const targetCalories = Number(rawTarget);
-      if (Number.isFinite(targetCalories) && targetCalories > 0) {
-        await prisma.dailyTarget.upsert({
-          where: {
-            userId_targetDate: {
-              userId: user.id,
-              targetDate: entryDate
-            }
-          },
-          update: {
-            targetCalories
-          },
-          create: {
-            userId: user.id,
-            targetDate: entryDate,
-            targetCalories
-          }
-        });
-      }
-    }
   }
 
   console.log(`Imported ${rows.length} rows for Telegram user ${telegramId}`);

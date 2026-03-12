@@ -151,45 +151,6 @@ export async function registerRoutes(app: FastifyInstance) {
     return getDashboardAnalytics({ userId: user.id, days });
   });
 
-  app.get("/targets", async (request) => {
-    const query = request.query as { telegramId?: string };
-    const user = query.telegramId
-      ? await getUserByTelegramId(query.telegramId)
-      : await resolveDefaultUser();
-
-    if (!user) {
-      return { targets: [] };
-    }
-
-    const targets = await prisma.dailyTarget.findMany({
-      where: { userId: user.id },
-      orderBy: { targetDate: "desc" },
-      take: 30
-    });
-
-    return { targets };
-  });
-
-  app.post("/targets", async (request) => {
-    const body = request.body as { userId: string; targetDate: string; targetCalories: number };
-    const target = await prisma.dailyTarget.upsert({
-      where: {
-        userId_targetDate: {
-          userId: body.userId,
-          targetDate: toDate(body.targetDate)
-        }
-      },
-      update: { targetCalories: body.targetCalories },
-      create: {
-        userId: body.userId,
-        targetDate: toDate(body.targetDate),
-        targetCalories: body.targetCalories
-      }
-    });
-
-    return { target };
-  });
-
   app.get("/reminders", async (request) => {
     const query = request.query as { telegramId: string };
     const user = await getUserByTelegramId(query.telegramId);

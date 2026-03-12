@@ -13,7 +13,7 @@ Telegram-first calorie tracking with a database-backed backend, a web dashboard,
 - Telegram commands for `/start`, `/log`, `/today`, `/week`, `/goal`, `/reminders`, and `/editlast`
 - Structured logging flow with inline buttons and favorite foods
 - Natural-language fallback with explicit confirmation before saving
-- Postgres data model for users, foods, meal entries, targets, reminders, and parse audit history
+- Postgres data model for users, foods, meal entries, reminders, and parse audit history
 - Dashboard for trend charts, goal hit/miss visibility, and top-food breakdowns
 - CSV import/export path so you can migrate from Google Sheets without keeping Sheets as the runtime backend
 

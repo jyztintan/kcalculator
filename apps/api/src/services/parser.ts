@@ -75,11 +75,11 @@ async function llmParse(message: string): Promise<ParseLogResult | null> {
 
 export async function parseLogMessage(message: string) {
   const heuristic = heuristicParse(message);
-  const llmResult = await llmParse(message);
+  // const llmResult = await llmParse(message);
 
-  if (llmResult && llmResult.confidence > heuristic.confidence) {
-    return llmResult;
-  }
+  // if (llmResult && llmResult.confidence > heuristic.confidence) {
+  //   return llmResult;
+  // }
 
   return heuristic;
 }

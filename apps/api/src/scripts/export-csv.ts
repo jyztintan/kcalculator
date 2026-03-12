@@ -21,16 +21,10 @@ async function main() {
     throw new Error(`User ${telegramId} not found`);
   }
 
-  const [entries, targets] = await Promise.all([
-    prisma.mealEntry.findMany({
-      where: { userId: user.id },
-      orderBy: { entryDate: "asc" }
-    }),
-    prisma.dailyTarget.findMany({
-      where: { userId: user.id },
-      orderBy: { targetDate: "asc" }
-    })
-  ]);
+  const entries = await prisma.mealEntry.findMany({
+    where: { userId: user.id },
+    orderBy: { entryDate: "asc" }
+  });
 
   await mkdir(outputDir, { recursive: true });
 
@@ -43,20 +37,9 @@ async function main() {
     { header: true }
   );
 
-  const targetsCsv = stringify(
-    targets.map((target: { targetDate: Date; targetCalories: number }) => ({
-      date: target.targetDate.toISOString().slice(0, 10),
-      targetCalories: target.targetCalories
-    })),
-    { header: true }
-  );
+  await writeFile(join(outputDir, "entries.csv"), entriesCsv, "utf8");
 
-  await Promise.all([
-    writeFile(join(outputDir, "entries.csv"), entriesCsv, "utf8"),
-    writeFile(join(outputDir, "targets.csv"), targetsCsv, "utf8")
-  ]);
-
-  console.log(`Exported entries and targets to ${outputDir}`);
+  console.log(`Exported entries to ${outputDir}`);
 }
 
 main()

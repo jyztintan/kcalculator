@@ -26,7 +26,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
   const startDate = addDays(today, -(days - 1));
   const endDate = addDays(today, 1);
 
-  const [entries, targets, recentFoods, user] = await Promise.all([
+  const [entries, recentFoods, user] = await Promise.all([
     prisma.mealEntry.findMany({
       where: {
         userId,
@@ -36,15 +36,6 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
         }
       },
       orderBy: { entryDate: "asc" }
-    }),
-    prisma.dailyTarget.findMany({
-      where: {
-        userId,
-        targetDate: {
-          gte: startDate,
-          lt: endDate
-        }
-      }
     }),
     prisma.mealEntry.groupBy({
       by: ["foodName"],
@@ -69,10 +60,6 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
     })
   ]);
 
-  const targetMap = new Map(
-    targets.map((target) => [formatDate(target.targetDate), target.targetCalories])
-  );
-
   const totalsByDay = new Map<string, number>();
   for (const entry of entries) {
     const key = formatDate(entry.entryDate);
@@ -88,7 +75,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
   for (let cursor = new Date(startDate); cursor < endDate; cursor = addDays(cursor, 1)) {
     const dateKey = formatDate(cursor);
     const calories = totalsByDay.get(dateKey) ?? 0;
-    const target = targetMap.get(dateKey) ?? user?.defaultCalorieTarget ?? 0;
+    const target = user?.defaultCalorieTarget ?? 0;
     const metGoal = calories > 0 && calories <= target;
     const exceededBy = calories > target ? calories - target : 0;
     const remaining = calories > 0 ? Math.max(target - calories, 0) : target;
@@ -116,7 +103,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
 
   const todayKey = formatDate(today);
   const todayCalories = totalsByDay.get(todayKey) ?? 0;
-  const todayTarget = targetMap.get(todayKey) ?? user?.defaultCalorieTarget ?? 0;
+  const todayTarget = user?.defaultCalorieTarget ?? 0;
   const adherenceRate = activeDays === 0 ? 0 : hitDays / activeDays;
 
   return {
@@ -131,7 +118,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
       trackedDays: activeDays
     },
     trend,
-    topFoods: recentFoods.map((food) => ({
+    topFoods: recentFoods.map((food: { foodName: string; _sum: { calories: number | null }; _count: { _all: number } }) => ({
       foodName: food.foodName,
       totalCalories: food._sum.calories ?? 0,
       count: food._count._all
