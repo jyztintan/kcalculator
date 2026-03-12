@@ -11,7 +11,9 @@ type SessionState = {
   payload: ParseLogResult;
 };
 
-type RequireUser = (ctx: Context) => Promise<{ id: string; timezone: string } | null>;
+type RequireUser = (
+  ctx: Context,
+) => Promise<{ id: string; timezone: string } | null>;
 
 const sessions = new Map<number, SessionState>();
 
@@ -71,7 +73,10 @@ async function getFavouritesKeyboard(
   return Markup.inlineKeyboard(rows);
 }
 
-export function registerLogCommands(bot: Telegraf<Context>, requireUser: RequireUser) {
+export function registerLogCommands(
+  bot: Telegraf<Context>,
+  requireUser: RequireUser,
+) {
   bot.command("log", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
@@ -109,15 +114,49 @@ export function registerLogCommands(bot: Telegraf<Context>, requireUser: Require
     });
   });
 
+  bot.command("addfav", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    const args = ctx.message.text.replace(/^\/addfav(@\w+)?\s*/, "").trim();
+    if (!args) {
+      await ctx.reply("Use `/addfav <food> <calories>` to add a favourite.", {
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+    const match = args.match(/^(.+)\s+(\d{2,5})$/);
+    if (!match) {
+      await ctx.reply("Invalid format. Use `/addfav <food> <calories>` to add a favourite.", {
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+      await prisma.food.create({
+        data: {
+          userId: user.id,
+          name: match[1],
+          slug: match[1].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+          defaultCalories: Number(match[2]),
+        },
+      });
+      await ctx.reply(`Favourite ${match[1]} created.`);
+  });
+
   bot.command("editlast", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
 
     const match = ctx.message.text.match(/\/editlast(@\w+)?\s+(\d{2,5})/);
     if (!match) {
-      await ctx.reply("Use `/editlast 650` to update the most recent entry calories.", {
-        parse_mode: "Markdown",
-      });
+      await ctx.reply(
+        "Use `/editlast 650` to update the most recent entry calories.",
+        {
+          parse_mode: "Markdown",
+        },
+      );
       return;
     }
 
@@ -153,7 +192,9 @@ export function registerLogCommands(bot: Telegraf<Context>, requireUser: Require
       data: {
         userId: user.id,
         foodId: food.id,
-        entryDate: new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`),
+        entryDate: new Date(
+          `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+        ),
         foodName: food.name,
         calories: food.defaultCalories,
         source: "favourite",
@@ -265,4 +306,3 @@ export function registerLogCommands(bot: Telegraf<Context>, requireUser: Require
     );
   });
 }
-

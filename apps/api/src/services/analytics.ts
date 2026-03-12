@@ -7,13 +7,14 @@ type AnalyticsInput = {
 
 function startOfDay(date: Date) {
   const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
+  // entryDate is stored at UTC midnight, so analytics should use UTC day boundaries
+  next.setUTCHours(0, 0, 0, 0);
   return next;
 }
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
-  next.setDate(next.getDate() + days);
+  next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
 
