@@ -4,6 +4,7 @@ import { Markup } from "telegraf";
 import { message } from "telegraf/filters";
 import type { Telegraf } from "telegraf";
 import { prisma } from "../lib/prisma.js";
+import { dateKeyToUtcMidnight, getLocalDateKey } from "../services/dates.js";
 import { parseLogMessage } from "../services/parser.js";
 
 type SessionState = {
@@ -25,7 +26,7 @@ async function createMealEntry(userId: string, payload: ParseLogResult) {
   return prisma.mealEntry.create({
     data: {
       userId,
-      entryDate: new Date(`${payload.entryDate}T00:00:00.000Z`),
+      entryDate: dateKeyToUtcMidnight(payload.entryDate),
       foodName: payload.foodName,
       calories: payload.calories,
       source: "parsed",
@@ -76,7 +77,7 @@ export function registerLogCommands(
       return;
     }
 
-    const parsed = await parseLogMessage(args);
+    const parsed = await parseLogMessage(args, user.timezone);
     if (!parsed.foodName) {
       await ctx.reply(LOG_MENU_MESSAGE, {
         parse_mode: "Markdown",
@@ -109,7 +110,7 @@ export function registerLogCommands(
           data: {
             userId: user.id,
             foodId: favourite.id,
-            entryDate: new Date(`${parsed.entryDate}T00:00:00.000Z`),
+            entryDate: dateKeyToUtcMidnight(parsed.entryDate),
             foodName: favourite.name,
             calories: favourite.defaultCalories,
             source: "favourite",
@@ -216,13 +217,13 @@ export function registerLogCommands(
       return;
     }
 
+    const todayKey = getLocalDateKey(user.timezone);
+
     await prisma.mealEntry.create({
       data: {
         userId: user.id,
         foodId: food.id,
-        entryDate: new Date(
-          `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-        ),
+        entryDate: dateKeyToUtcMidnight(todayKey),
         foodName: food.name,
         calories: food.defaultCalories,
         source: "favourite",
@@ -303,7 +304,7 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const parsed = await parseLogMessage(ctx.message.text);
+    const parsed = await parseLogMessage(ctx.message.text, user.timezone);
     await prisma.parserAudit.create({
       data: {
         userId: user.id,

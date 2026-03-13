@@ -1,17 +1,22 @@
 import type { FastifyInstance } from "fastify";
-import { foodCreateSchema, mealEntryCreateSchema, reminderCreateSchema } from "@kcalculator/shared";
+import {
+  foodCreateSchema,
+  mealEntryCreateSchema,
+  reminderCreateSchema,
+} from "@kcalculator/shared";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
 import { getDashboardAnalytics } from "../services/analytics.js";
 import { verifyDashboardToken } from "../services/dashboard-token.js";
-import { ensureUser, getUserByTelegramId, resolveDefaultUser } from "../services/users.js";
+import {
+  ensureUser,
+  getUserByTelegramId,
+  resolveDefaultUser,
+} from "../services/users.js";
+import { dateKeyToUtcMidnight, getLocalDateKey, addDays } from "../services/dates.js";
 
 function normaliseName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
-
-function toDate(value: string) {
-  return new Date(`${value}T00:00:00.000Z`);
 }
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -23,7 +28,11 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.post("/users/sync", async (request) => {
-    const body = request.body as { telegramId: string; username?: string; firstName?: string };
+    const body = request.body as {
+      telegramId: string;
+      username?: string;
+      firstName?: string;
+    };
     const user = await ensureUser(body);
     return { user };
   });
@@ -48,17 +57,17 @@ export async function registerRoutes(app: FastifyInstance) {
       where: {
         userId_name: {
           userId: body.userId,
-          name: body.name.trim()
-        }
+          name: body.name.trim(),
+        },
       },
       update: {
-        defaultCalories: body.defaultCalories
+        defaultCalories: body.defaultCalories,
       },
       create: {
         userId: body.userId,
         name: body.name.trim(),
-        defaultCalories: body.defaultCalories
-      }
+        defaultCalories: body.defaultCalories,
+      },
     });
 
     return { food };
@@ -71,17 +80,17 @@ export async function registerRoutes(app: FastifyInstance) {
       return { entries: [] };
     }
 
-    const date = query.date ?? new Date().toISOString().slice(0, 10);
-    const start = toDate(date);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    const timezone = user.timezone;
+    const dateKey = query.date ?? getLocalDateKey(timezone);
+    const start = dateKeyToUtcMidnight(dateKey);
+    const end = addDays(start, 1);
 
     const entries = await prisma.mealEntry.findMany({
       where: {
         userId: user.id,
-        entryDate: { gte: start, lt: end }
+        entryDate: { gte: start, lt: end },
       },
-      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }]
+      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
     });
 
     return { entries };
@@ -90,17 +99,21 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post("/entries", async (request) => {
     const body = mealEntryCreateSchema.parse(request.body);
     const foods = await prisma.food.findMany({ where: { userId: body.userId } });
-    const food = foods.find((f: { name: string }) => normaliseName(f.name) === normaliseName(body.foodName)) ?? null;
+    const food =
+      foods.find(
+        (f: { name: string }) =>
+          normaliseName(f.name) === normaliseName(body.foodName),
+      ) ?? null;
 
     const entry = await prisma.mealEntry.create({
       data: {
         userId: body.userId,
         foodId: food?.id,
-        entryDate: toDate(body.entryDate),
+        entryDate: dateKeyToUtcMidnight(body.entryDate),
         foodName: body.foodName,
         calories: body.calories,
         source: body.source,
-      }
+      },
     });
 
     if (!food) {
@@ -108,8 +121,8 @@ export async function registerRoutes(app: FastifyInstance) {
         data: {
           userId: body.userId,
           name: body.foodName.trim(),
-          defaultCalories: body.calories
-        }
+          defaultCalories: body.calories,
+        },
       });
     }
 
@@ -125,19 +138,26 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const entry = await prisma.mealEntry.update({
       where: { id: params.entryId },
-      data: body
+      data: body,
     });
 
     return { entry };
   });
 
   app.get("/dashboard", async (request) => {
-    const query = request.query as { telegramId?: string; token?: string; days?: string };
+    const query = request.query as {
+      telegramId?: string;
+      token?: string;
+      days?: string;
+    };
     const days = Number(query.days ?? 90);
 
     const telegramIdFromToken =
       query.token && env.DASHBOARD_TOKEN_SECRET
-        ? verifyDashboardToken({ token: query.token, secret: env.DASHBOARD_TOKEN_SECRET })?.telegramId
+        ? verifyDashboardToken({
+            token: query.token,
+            secret: env.DASHBOARD_TOKEN_SECRET,
+          })?.telegramId
         : null;
 
     const user = telegramIdFromToken
@@ -150,7 +170,7 @@ export async function registerRoutes(app: FastifyInstance) {
       return {
         summary: null,
         trend: [],
-        topFoods: []
+        topFoods: [],
       };
     }
 
@@ -166,7 +186,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const reminders = await prisma.reminder.findMany({
       where: { userId: user.id },
-      orderBy: [{ hour: "asc" }, { minute: "asc" }]
+      orderBy: [{ hour: "asc" }, { minute: "asc" }],
     });
 
     return { reminders };
@@ -175,7 +195,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post("/reminders", async (request) => {
     const body = reminderCreateSchema.parse(request.body);
     const reminder = await prisma.reminder.create({
-      data: body
+      data: body,
     });
 
     return { reminder };

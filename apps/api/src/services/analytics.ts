@@ -1,42 +1,36 @@
 import { prisma } from "../lib/prisma.js";
+import { addDays, dateKeyToUtcMidnight, getLocalDateKey } from "./dates.js";
 
 type AnalyticsInput = {
   userId: string;
   days: number;
 };
 
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  // entryDate is stored at UTC midnight, so analytics should use UTC day boundaries
-  next.setUTCHours(0, 0, 0, 0);
-  return next;
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
 export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
-  const today = startOfDay(new Date());
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  const timezone = user?.timezone ?? "UTC";
+  const todayKey = getLocalDateKey(timezone);
+  const today = dateKeyToUtcMidnight(todayKey);
   const startDate = addDays(today, -(days - 1));
   const endDate = addDays(today, 1);
 
-  const [entries, recentFoods, user] = await Promise.all([
+  const [entries, recentFoods] = await Promise.all([
     prisma.mealEntry.findMany({
       where: {
         userId,
         entryDate: {
           gte: startDate,
-          lt: endDate
-        }
+          lt: endDate,
+        },
       },
-      orderBy: { entryDate: "asc" }
+      orderBy: { entryDate: "asc" },
     }),
     prisma.mealEntry.groupBy({
       by: ["foodName"],
@@ -44,21 +38,18 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
         userId,
         entryDate: {
           gte: startDate,
-          lt: endDate
-        }
+          lt: endDate,
+        },
       },
       _sum: { calories: true },
       _count: { _all: true },
       orderBy: {
         _sum: {
-          calories: "desc"
-        }
+          calories: "desc",
+        },
       },
-      take: 10
+      take: 10,
     }),
-    prisma.user.findUnique({
-      where: { id: userId }
-    })
   ]);
 
   const totalsByDay = new Map<string, number>();
@@ -73,7 +64,11 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
   let totalCalories = 0;
   let activeDays = 0;
 
-  for (let cursor = new Date(startDate); cursor < endDate; cursor = addDays(cursor, 1)) {
+  for (
+    let cursor = new Date(startDate);
+    cursor < endDate;
+    cursor = addDays(cursor, 1)
+  ) {
     const dateKey = formatDate(cursor);
     const calories = totalsByDay.get(dateKey) ?? 0;
     const target = user?.defaultCalorieTarget ?? 0;
@@ -102,7 +97,6 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
     });
   }
 
-  const todayKey = formatDate(today);
   const todayCalories = totalsByDay.get(todayKey) ?? 0;
   const todayTarget = user?.defaultCalorieTarget ?? 0;
   const adherenceRate = activeDays === 0 ? 0 : hitDays / activeDays;
@@ -119,16 +113,28 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
       trackedDays: activeDays
     },
     trend,
-    topFoods: recentFoods.map((food: { foodName: string; _sum: { calories: number | null }; _count: { _all: number } }) => ({
-      foodName: food.foodName,
-      totalCalories: food._sum.calories ?? 0,
-      count: food._count._all
-    }))
+    topFoods: recentFoods.map(
+      (food: {
+        foodName: string;
+        _sum: { calories: number | null };
+        _count: { _all: number };
+      }) => ({
+        foodName: food.foodName,
+        totalCalories: food._sum.calories ?? 0,
+        count: food._count._all,
+      }),
+    ),
   };
 }
 
 export async function getTodaySummaryText(userId: string) {
-  const today = startOfDay(new Date());
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  const timezone = user?.timezone ?? "UTC";
+  const todayKey = getLocalDateKey(timezone);
+  const today = dateKeyToUtcMidnight(todayKey);
   const tomorrow = addDays(today, 1);
 
   const [analytics, entries] = await Promise.all([

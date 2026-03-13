@@ -1,17 +1,18 @@
 import OpenAI from "openai";
 import { parseLogResultSchema, type ParseLogResult } from "@kcalculator/shared";
 import { env } from "../config/env.js";
+import { getLocalDateKey } from "./dates.js";
 
 const openai = env.OPENAI_API_KEY
   ? new OpenAI({
-      apiKey: env.OPENAI_API_KEY
+      apiKey: env.OPENAI_API_KEY,
     })
   : null;
 
-function heuristicParse(message: string): ParseLogResult {
+function heuristicParse(message: string, timezone: string): ParseLogResult {
   const normalized = message.trim().toLowerCase();
   const caloriesMatch = normalized.match(/(\d{2,5})\s*(kcal|cal)?\b/);
-  const entryDate = new Date().toISOString().slice(0, 10);
+  const entryDate = getLocalDateKey(timezone);
 
   const rawFoodName = normalized
     .replace(/^(had|ate|log|logged)\s+/, "")
@@ -28,11 +29,14 @@ function heuristicParse(message: string): ParseLogResult {
     foodName,
     calories: caloriesMatch ? Number(caloriesMatch[1]) : undefined,
     clarification:
-      confidence >= 0.7 ? undefined : "I could not confidently detect calories."
+      confidence >= 0.7 ? undefined : "I could not confidently detect calories.",
   });
 }
 
-async function llmParse(message: string): Promise<ParseLogResult | null> {
+async function llmParse(
+  message: string,
+  _timezone: string,
+): Promise<ParseLogResult | null> {
   if (!openai) {
     return null;
   }
@@ -49,16 +53,16 @@ async function llmParse(message: string): Promise<ParseLogResult | null> {
             text: [
               "Extract a calorie log into JSON.",
               "Return only JSON with keys: confidence, entryDate, foodName, calories, clarification.",
-              "Use today's date if no date is given."
-            ].join(" ")
-          }
-        ]
+              "Use today's date if no date is given.",
+            ].join(" "),
+          },
+        ],
       },
       {
         role: "user",
-        content: [{ type: "input_text", text: message }]
-      }
-    ]
+        content: [{ type: "input_text", text: message }],
+      },
+    ],
   });
 
   const text = completion.output_text;
@@ -73,9 +77,9 @@ async function llmParse(message: string): Promise<ParseLogResult | null> {
   }
 }
 
-export async function parseLogMessage(message: string) {
-  const heuristic = heuristicParse(message);
-  // const llmResult = await llmParse(message);
+export async function parseLogMessage(message: string, timezone: string) {
+  const heuristic = heuristicParse(message, timezone);
+  // const llmResult = await llmParse(message, timezone);
 
   // if (llmResult && llmResult.confidence > heuristic.confidence) {
   //   return llmResult;
