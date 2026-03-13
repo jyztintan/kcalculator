@@ -9,30 +9,6 @@ const openai = env.OPENAI_API_KEY
     })
   : null;
 
-function heuristicParse(message: string, timezone: string): ParseLogResult {
-  const normalized = message.trim().toLowerCase();
-  const caloriesMatch = normalized.match(/(\d{2,5})\s*(kcal|cal)?\b/);
-  const entryDate = getLocalDateKey(timezone);
-
-  const rawFoodName = normalized
-    .replace(/^(had|ate|log|logged)\s+/, "")
-    .replace(/(\d{2,5})\s*(kcal|cal)?\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const foodName = rawFoodName || undefined;
-
-  const confidence = caloriesMatch && foodName ? 0.85 : 0.35;
-
-  return parseLogResultSchema.parse({
-    confidence,
-    entryDate,
-    foodName,
-    calories: caloriesMatch ? Number(caloriesMatch[1]) : undefined,
-    clarification:
-      confidence >= 0.7 ? undefined : "I could not confidently detect calories.",
-  });
-}
-
 async function llmParse(
   message: string,
   _timezone: string,
@@ -78,12 +54,19 @@ async function llmParse(
 }
 
 export async function parseLogMessage(message: string, timezone: string) {
-  const heuristic = heuristicParse(message, timezone);
-  // const llmResult = await llmParse(message, timezone);
+  const normalized = message.trim().toLowerCase();
+  const rawFoodName = normalized
+    .replace(/^(had|ate|log|logged)\s+/, "")
+    .replace(/(\d{2,5})\s*(kcal|cal)?\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const foodName = rawFoodName || undefined;
+  const caloriesMatch = normalized.match(/(\d{2,5})\s*(kcal|cal)?\b/);
 
-  // if (llmResult && llmResult.confidence > heuristic.confidence) {
-  //   return llmResult;
-  // }
-
-  return heuristic;
+  return {
+    entryDate: getLocalDateKey(timezone),
+    foodName: foodName,
+    calories: caloriesMatch ? Number(caloriesMatch[1]) : undefined,
+    confidence: 0.99,
+  };
 }
