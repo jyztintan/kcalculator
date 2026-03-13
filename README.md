@@ -50,11 +50,15 @@ npm run dev:api
 npm run dev:dashboard
 ```
 
+6. [For devs] Visualise backend data with: `npx prisma studio --schema apps/api/prisma/schema.prisma`
+
+2. Visualise dashboard data with: `npm run dev:dashboard`
+
 ## Google Sheets migration
 
 Export the sheet as CSV, then run:
 
-```bash
+```bash`
 IMPORT_FILE="/absolute/path/to/export.csv" npm run import:csv
 ```
 
