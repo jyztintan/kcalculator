@@ -17,9 +17,9 @@ async function main() {
 
   await prisma.food.upsert({
     where: {
-      userId_slug: {
+      userId_name: {
         userId: user.id,
-        slug: "protein"
+        name: "protein"
       }
     },
     update: {
@@ -28,7 +28,6 @@ async function main() {
     create: {
       userId: user.id,
       name: "protein",
-      slug: "protein",
       defaultCalories: 115
     }
   });

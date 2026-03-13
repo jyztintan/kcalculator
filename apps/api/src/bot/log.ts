@@ -21,24 +21,10 @@ const LOG_MENU_MESSAGE =
   "Send `/log <food> <kcal>` — for example, `/log chicken rice 650` — or choose a favourite:";
 const FAV_MENU_MESSAGE = "Choose a favourite to log, or cancel operation?";
 
-async function createMealEntry(
-  userId: string,
-  payload: ParseLogResult & { foodName: string; calories: number },
-) {
-  const food = await prisma.food.findFirst({
-    where: {
-      userId,
-      slug: payload.foodName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, ""),
-    },
-  });
-
+async function createMealEntry(userId: string, payload: ParseLogResult) {
   return prisma.mealEntry.create({
     data: {
       userId,
-      foodId: food?.id,
       entryDate: new Date(`${payload.entryDate}T00:00:00.000Z`),
       foodName: payload.foodName,
       calories: payload.calories,
@@ -82,27 +68,67 @@ export function registerLogCommands(
     if (!user) return;
 
     const args = ctx.message.text.replace(/^\/log(@\w+)?\s*/, "").trim();
-    if (args) {
-      const parsed = await parseLogMessage(args);
-      if (parsed.foodName && parsed.calories) {
-        sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
+    if (!args) {
+      await ctx.reply(LOG_MENU_MESSAGE, {
+        parse_mode: "Markdown",
+        ...(await getFavouritesKeyboard(user.id)),
+      });
+      return;
+    }
+
+    const parsed = await parseLogMessage(args);
+    if (!parsed.foodName) {
+      await ctx.reply(LOG_MENU_MESSAGE, {
+        parse_mode: "Markdown",
+        ...(await getFavouritesKeyboard(user.id)),
+      });
+      return;
+    }
+
+    // 1. use explicit food name and calories if given
+    if (parsed.foodName && parsed.calories) {
+      sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
+      await ctx.reply(
+        `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback("Save", "parse-confirm"),
+            Markup.button.callback("Cancel", "parse-reject"),
+          ],
+        ]),
+      );
+      return;
+    } else if (parsed.foodName && !parsed.calories) {
+      // 2. use favourite if name matches and no calories given
+      const favourite = await prisma.food.findFirst({
+        where: { userId: user.id, name: parsed.foodName },
+      });
+
+      if (favourite) {
+        await prisma.mealEntry.create({
+          data: {
+            userId: user.id,
+            foodId: favourite.id,
+            entryDate: new Date(`${parsed.entryDate}T00:00:00.000Z`),
+            foodName: favourite.name,
+            calories: favourite.defaultCalories,
+            source: "favourite",
+          },
+        });
+
         await ctx.reply(
-          `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
-          Markup.inlineKeyboard([
-            [
-              Markup.button.callback("Save", "parse-confirm"),
-              Markup.button.callback("Cancel", "parse-reject"),
-            ],
-          ]),
+          `Logged ${favourite.name} for ${favourite.defaultCalories} kcal.`,
         );
+        return;
+      } else {
+        await ctx.reply(
+          `Don't play play leh, I couldn't find ${parsed.foodName} in your favourites. Use /addfav to add it first.`, {
+          parse_mode: "Markdown",
+          ...(await getFavouritesKeyboard(user.id)),
+        });
         return;
       }
     }
-
-    await ctx.reply(LOG_MENU_MESSAGE, {
-      parse_mode: "Markdown",
-      ...(await getFavouritesKeyboard(user.id)),
-    });
   });
 
   bot.command("fav", async (ctx) => {
@@ -128,21 +154,23 @@ export function registerLogCommands(
 
     const match = args.match(/^(.+)\s+(\d{2,5})$/);
     if (!match) {
-      await ctx.reply("Invalid format. Use `/addfav <food> <calories>` to add a favourite.", {
-        parse_mode: "Markdown",
-      });
+      await ctx.reply(
+        "Invalid format. Use `/addfav <food> <calories>` to add a favourite.",
+        {
+          parse_mode: "Markdown",
+        },
+      );
       return;
     }
 
-      await prisma.food.create({
-        data: {
-          userId: user.id,
-          name: match[1],
-          slug: match[1].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-          defaultCalories: Number(match[2]),
-        },
-      });
-      await ctx.reply(`Favourite ${match[1]} created.`);
+    await prisma.food.create({
+      data: {
+        userId: user.id,
+        name: match[1].toLowerCase(),
+        defaultCalories: Number(match[2]),
+      },
+    });
+    await ctx.reply(`Favourite ${match[1]} created.`);
   });
 
   bot.command("editlast", async (ctx) => {

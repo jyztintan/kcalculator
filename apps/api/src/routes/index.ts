@@ -6,7 +6,7 @@ import { getDashboardAnalytics } from "../services/analytics.js";
 import { verifyDashboardToken } from "../services/dashboard-token.js";
 import { ensureUser, getUserByTelegramId, resolveDefaultUser } from "../services/users.js";
 
-function slugify(value: string) {
+function normaliseName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
@@ -46,9 +46,9 @@ export async function registerRoutes(app: FastifyInstance) {
     const body = foodCreateSchema.parse(request.body);
     const food = await prisma.food.upsert({
       where: {
-        userId_slug: {
+        userId_name: {
           userId: body.userId,
-          slug: slugify(body.name)
+          name: body.name.trim()
         }
       },
       update: {
@@ -56,8 +56,7 @@ export async function registerRoutes(app: FastifyInstance) {
       },
       create: {
         userId: body.userId,
-        name: body.name,
-        slug: slugify(body.name),
+        name: body.name.trim(),
         defaultCalories: body.defaultCalories
       }
     });
@@ -90,9 +89,8 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.post("/entries", async (request) => {
     const body = mealEntryCreateSchema.parse(request.body);
-    const food = await prisma.food.findFirst({
-      where: { userId: body.userId, slug: slugify(body.foodName) }
-    });
+    const foods = await prisma.food.findMany({ where: { userId: body.userId } });
+    const food = foods.find((f: { name: string }) => normaliseName(f.name) === normaliseName(body.foodName)) ?? null;
 
     const entry = await prisma.mealEntry.create({
       data: {
@@ -109,8 +107,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await prisma.food.create({
         data: {
           userId: body.userId,
-          name: body.foodName,
-          slug: slugify(body.foodName),
+          name: body.foodName.trim(),
           defaultCalories: body.calories
         }
       });

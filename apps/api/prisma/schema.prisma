@@ -39,13 +39,12 @@ model Food {
   userId           String
   user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
-  slug             String
   defaultCalories  Int
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   mealEntries      MealEntry[]
 
-  @@unique([userId, slug])
+  @@unique([userId, name])
 }
 
 model MealEntry {

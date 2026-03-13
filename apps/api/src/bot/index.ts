@@ -32,8 +32,8 @@ async function requireUser(ctx: Context) {
 
 function getHelpMessage(user: string) {
   return [
-    `Hello ${user}! bui bui. Here's how you can use this bot to stop being a fatty bom bom: \n`,
-    `/log to log a food entry for today, \n
+    `Hello ${user} bui bui 🐷! Here's how you can use this bot to stop being a fatty bom bom: \n
+    /log to log a food entry for today, \n
     /fav to choose from favourites to log, \n
     /today for your daily summary, \n
     /week for your weekly summary, \n
