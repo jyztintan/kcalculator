@@ -11,6 +11,7 @@
     "dev:dashboard": "npm run dev -w @kcalculator/dashboard",
     "build": "npm run build -w @kcalculator/shared && npm run build -w @kcalculator/api && npm run build -w @kcalculator/dashboard",
     "lint": "npm run lint -w @kcalculator/dashboard",
+    "test": "vitest",
     "prisma:generate": "npm run prisma:generate -w @kcalculator/api",
     "db:push": "npm run prisma:push -w @kcalculator/api",
     "seed": "npm run seed -w @kcalculator/api",
@@ -25,6 +26,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   }
 }

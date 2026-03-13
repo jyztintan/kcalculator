@@ -22,14 +22,20 @@ const LOG_MENU_MESSAGE =
   "Send `/log <food> <kcal>` — for example, `/log chicken rice 650` — or choose a favourite:";
 const FAV_MENU_MESSAGE = "Choose a favourite to log, or cancel operation?";
 
-async function createMealEntry(userId: string, payload: ParseLogResult) {
+async function createMealEntry(
+  userId: string,
+  entryDate: string,
+  foodName: string,
+  calories: number,
+  source: string,
+) {
   return prisma.mealEntry.create({
     data: {
       userId,
-      entryDate: dateKeyToUtcMidnight(payload.entryDate),
-      foodName: payload.foodName,
-      calories: payload.calories,
-      source: "parsed",
+      entryDate: dateKeyToUtcMidnight(entryDate),
+      foodName: foodName,
+      calories: calories,
+      source: source,
     },
   });
 }
@@ -219,16 +225,7 @@ export function registerLogCommands(
 
     const todayKey = getLocalDateKey(user.timezone);
 
-    await prisma.mealEntry.create({
-      data: {
-        userId: user.id,
-        foodId: food.id,
-        entryDate: dateKeyToUtcMidnight(todayKey),
-        foodName: food.name,
-        calories: food.defaultCalories,
-        source: "favourite",
-      },
-    });
+    await createMealEntry(user.id, todayKey, food.name, food.defaultCalories, "favourite");
 
     await ctx.answerCbQuery();
     await ctx.reply(`Logged ${food.name} for ${food.defaultCalories} kcal.`);
@@ -248,11 +245,12 @@ export function registerLogCommands(
       return;
     }
 
-    await createMealEntry(user.id, {
-      ...session.payload,
-      foodName: session.payload.foodName,
-      calories: session.payload.calories,
-    });
+    await createMealEntry(user.id, 
+      session.payload.entryDate,
+      session.payload.foodName,
+      session.payload.calories,
+      "parsed",
+    );
 
     await prisma.parserAudit.create({
       data: {
