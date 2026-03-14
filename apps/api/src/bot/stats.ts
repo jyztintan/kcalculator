@@ -43,6 +43,7 @@ export function registerStatsCommands(
       ctx.message.text.replace(/^\/stats(@\w+)?\s*(\d+)?/, "$2").trim() || "30";
 
     const days = daysArg ? Number(daysArg) : 30;
+    await ctx.reply(`Generating stats...`);
     const analytics = await getDashboardAnalytics({ userId: user.id, days });
 
     const labels = analytics.trend.map((point) => point.date.slice(5));
