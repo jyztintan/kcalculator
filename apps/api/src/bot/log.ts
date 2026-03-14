@@ -150,16 +150,16 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const parsed = await parseLogMessage(ctx.message.text, user.timezone);
-    await prisma.parserAudit.create({
-      data: {
-        userId: user.id,
-        rawMessage: ctx.message.text,
-        parsedPayload: parsed,
-        confidence: parsed.confidence,
-        accepted: null,
-      },
-    });
+    // const parsed = await parseLogMessage(ctx.message.text, user.timezone);
+    // await prisma.parserAudit.create({
+    //   data: {
+    //     userId: user.id,
+    //     rawMessage: ctx.message.text,
+    //     parsedPayload: parsed,
+    //     confidence: parsed.confidence,
+    //     accepted: null,
+    //   },
+    // });
 
     await handleLogInput(ctx, user.id, user.timezone, ctx.message.text);
   });
@@ -287,15 +287,15 @@ export function registerLogCommands(
       "parsed",
     );
 
-    await prisma.parserAudit.create({
-      data: {
-        userId: user.id,
-        rawMessage: "telegram-natural-language",
-        parsedPayload: session.payload,
-        confidence: session.payload.confidence,
-        accepted: true,
-      },
-    });
+    // await prisma.parserAudit.create({
+    //   data: {
+    //     userId: user.id,
+    //     rawMessage: "telegram-natural-language",
+    //     parsedPayload: session.payload,
+    //     confidence: session.payload.confidence,
+    //     accepted: true,
+    //   },
+    // });
 
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
@@ -306,18 +306,18 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const session = sessions.get(ctx.chat!.id);
-    if (session?.kind === "parse-confirm") {
-      await prisma.parserAudit.create({
-        data: {
-          userId: user.id,
-          rawMessage: "telegram-natural-language",
-          parsedPayload: session.payload,
-          confidence: session.payload.confidence,
-          accepted: false,
-        },
-      });
-    }
+    // const session = sessions.get(ctx.chat!.id);
+    // if (session?.kind === "parse-confirm") {
+    //   await prisma.parserAudit.create({
+    //     data: {
+    //       userId: user.id,
+    //       rawMessage: "telegram-natural-language",
+    //       parsedPayload: session.payload,
+    //       confidence: session.payload.confidence,
+    //       accepted: false,
+    //     },
+    //   });
+    // }
 
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
