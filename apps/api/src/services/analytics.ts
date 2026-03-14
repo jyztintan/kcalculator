@@ -151,10 +151,6 @@ function formatDayLabel(
   todayKey: string,
 ): string {
   const key = normalizeDateKey(dateKey);
-  const todayNorm = normalizeDateKey(todayKey);
-  if (key === todayNorm) return "Today";
-  const yesterdayNorm = addDaysToDateKey(todayNorm, -1);
-  if (key === yesterdayNorm) return "Yesterday";
   const [y, m, d] = key.split("-").map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.toLocaleDateString("en-GB", {
@@ -208,29 +204,56 @@ export async function getDaySummaryText(
             `- ${e.foodName} (${e.calories} kcal)`,
         );
 
-  if (dateKeyNorm !== todayKeyNorm) {
-    return [
-      `bro you devoured ${totalCalories} kcal on ${dayLabel}:`,
-      ...lines,
-      "",
-      `Total: ${dayLabel}: ${totalCalories}/${target} kcal`,
-      `Remaining: ${remaining} kcal`,
-    ].join("\n");
-  }
-  
-  const analytics = await getDashboardAnalytics({ userId, days: 7 });
+  const message = formatDayText(lines, totalCalories, dayLabel, target, remaining);
   const scolding =
     totalCalories > target
       ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
       : "";
-  return [
-    "Let's see how much you devoured today...",
-    ...lines,
-    `${scolding}`,
-    `Today: ${totalCalories}/${target} kcal`,
-    `Remaining: ${remaining} kcal`,
-    "",
-    `7-day avg: ${analytics.summary.weeklyAverage} kcal`,
-    `Hit days: ${analytics.summary.hitDays}, Missed days: ${analytics.summary.missedDays}`,
-  ].join("\n");
+  if ((dateKeyNorm === todayKeyNorm) && (totalCalories > target)) {
+    return `${message}${scolding}`;
+  }
+  return message;
+}
+
+export async function getWeekSummaryText(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  const timezone = user?.timezone ?? "UTC";
+  const todayKey = getLocalDateKey(timezone);
+
+  const start = dateKeyToUtcMidnight(todayKey);
+  const end = addDays(start, 7);
+
+  const analytics = await getDashboardAnalytics({ userId, days: 7 });
+
+  const entries = await prisma.mealEntry.findMany({
+    where: {
+      userId,
+      entryDate: { gte: start, lt: end },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { foodName: true, calories: true },
+  });
+
+  const lines =
+    entries.length === 0
+      ? ["hungry boi... never eat ah?"]
+      : entries.map(
+          (e: { foodName: string; calories: number }) =>
+            `- ${e.foodName} (${e.calories} kcal)`,
+        );
+
+  return lines.join("\n");
+}
+
+function formatDayText(lines: string[], totalCalories: number, dateLabel: string, target: number, remaining: number) {
+    return [
+      `bro you devoured ${totalCalories} kcal on ${dateLabel}`,
+      ...lines,
+      "",
+      `Total: ${totalCalories}/${target} kcal`,
+      `Remaining: ${remaining} kcal`,
+      "",
+    ].join("\n");
 }
