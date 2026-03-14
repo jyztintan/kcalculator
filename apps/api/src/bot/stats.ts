@@ -43,6 +43,10 @@ export function registerStatsCommands(
       ctx.message.text.replace(/^\/stats(@\w+)?\s*(\d+)?/, "$2").trim() || "30";
 
     const days = daysArg ? Number(daysArg) : 30;
+    if (days > 250) {
+      await ctx.reply("cb you think RAM free isit, max 250 days");
+      return;
+    }
     await ctx.reply(`Generating stats...`);
     const analytics = await getDashboardAnalytics({ userId: user.id, days });
 
@@ -95,20 +99,26 @@ export function registerStatsCommands(
           },
         },
         scales: {
-          x: {
-            ticks: {
-              maxRotation: 90,
-              minRotation: 45,
+          xAxes: [
+            {
+              ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+              },
             },
-          },
-          y: {
-            beginAtZero: true,
-          },
+          ],
+          yAxes: [
+            {
+              ticks: {
+                beginAtZero: true,
+                min: 0,
+              },
+            },
+          ],
         },
       },
     };
 
-    // Cap dimensions so Telegram accepts (PHOTO_INVALID_DIMENSIONS); aspect ratio must be ≤20:1
     const width = 1280;
     const height = 640;
     const chartUrl = `https://quickchart.io/chart?w=${width}&h=${height}&devicePixelRatio=1&c=${encodeURIComponent(
