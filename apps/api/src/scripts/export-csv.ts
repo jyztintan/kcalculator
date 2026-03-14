@@ -9,11 +9,10 @@ async function main() {
   const outputDir = process.env.EXPORT_DIR ?? "exports";
   const telegramId =
     process.env.EXPORT_TELEGRAM_ID ||
-    env.DEFAULT_DASHBOARD_TELEGRAM_ID ||
     env.TELEGRAM_ALLOWED_USER_IDS.split(",")[0]?.trim();
 
   if (!telegramId) {
-    throw new Error("Set EXPORT_TELEGRAM_ID or DEFAULT_DASHBOARD_TELEGRAM_ID before exporting.");
+    throw new Error("Set EXPORT_TELEGRAM_ID or TELEGRAM_ALLOWED_USER_IDS before exporting.");
   }
 
   const user = await getUserByTelegramId(telegramId);

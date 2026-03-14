@@ -19,11 +19,8 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((value) => value === "true"),
-  DASHBOARD_PUBLIC_URL: z.string().optional(),
-  DASHBOARD_TOKEN_SECRET: z.string().optional(),
   DEFAULT_CALORIE_TARGET: z.coerce.number().default(2267),
   DEFAULT_TIMEZONE: z.string().default("Asia/Singapore"),
-  DEFAULT_DASHBOARD_TELEGRAM_ID: z.string().default(""),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini")
 });

@@ -5,9 +5,6 @@ import {
   reminderCreateSchema,
 } from "@kcalculator/shared";
 import { prisma } from "../lib/prisma.js";
-import { env } from "../config/env.js";
-import { getDashboardAnalytics } from "../services/analytics.js";
-import { verifyDashboardToken } from "../services/dashboard-token.js";
 import {
   ensureUser,
   getUserByTelegramId,
@@ -142,39 +139,6 @@ export async function registerRoutes(app: FastifyInstance) {
     });
 
     return { entry };
-  });
-
-  app.get("/dashboard", async (request) => {
-    const query = request.query as {
-      telegramId?: string;
-      token?: string;
-      days?: string;
-    };
-    const days = Number(query.days ?? 90);
-
-    const telegramIdFromToken =
-      query.token && env.DASHBOARD_TOKEN_SECRET
-        ? verifyDashboardToken({
-            token: query.token,
-            secret: env.DASHBOARD_TOKEN_SECRET,
-          })?.telegramId
-        : null;
-
-    const user = telegramIdFromToken
-      ? await getUserByTelegramId(telegramIdFromToken)
-      : query.telegramId
-        ? await getUserByTelegramId(query.telegramId)
-        : await resolveDefaultUser();
-
-    if (!user) {
-      return {
-        summary: null,
-        trend: [],
-        topFoods: [],
-      };
-    }
-
-    return getDashboardAnalytics({ userId: user.id, days });
   });
 
   app.get("/reminders", async (request) => {

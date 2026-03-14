@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { ensureUser } from "../services/users.js";
 
 async function main() {
-  const defaultTelegramId = env.DEFAULT_DASHBOARD_TELEGRAM_ID || env.TELEGRAM_ALLOWED_USER_IDS.split(",")[0]?.trim();
+  const defaultTelegramId = env.TELEGRAM_ALLOWED_USER_IDS.split(",")[0]?.trim();
 
   if (!defaultTelegramId) {
     console.log("No default Telegram ID configured. Skipping seed.");

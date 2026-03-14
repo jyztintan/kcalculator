@@ -26,7 +26,7 @@ if (bot) {
       { command: "addfav", description: "Add a favourite (food + calories)" },
       { command: "day", description: "Show today’s summary" },
       { command: "week", description: "Show this week’s summary" },
-      { command: "stats", description: "Dashboard link + longer stats" },
+      { command: "stats", description: "Longer-term stats + chart" },
       { command: "goal", description: "Set daily calorie target" },
       { command: "reminders", description: "List / add / delete reminders" },
       { command: "editlast", description: "Edit the most recent entry calories" },

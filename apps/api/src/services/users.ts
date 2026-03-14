@@ -29,10 +29,6 @@ export async function getUserByTelegramId(telegramId: string) {
 }
 
 export async function resolveDefaultUser() {
-  if (env.DEFAULT_DASHBOARD_TELEGRAM_ID) {
-    return getUserByTelegramId(env.DEFAULT_DASHBOARD_TELEGRAM_ID);
-  }
-
   return prisma.user.findFirst({
     orderBy: { createdAt: "asc" }
   });

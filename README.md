@@ -1,11 +1,10 @@
 # KCalculator
 
-Telegram-first calorie tracking with a database-backed backend, a web dashboard, reminders, and CSV migration tooling for your existing Google Sheets workflow.
+Telegram-first calorie tracking with a database-backed backend, Telegram bot stats (including chart images), reminders, and CSV migration tooling for your existing Google Sheets workflow.
 
 ## What is included
 
 - `apps/api`: Fastify API, Telegram bot, Prisma schema, reminders, natural-language parsing, and CSV import/export scripts
-- `apps/dashboard`: Next.js dashboard with summary cards and chart views inspired by your current master sheet
 - `packages/shared`: shared Zod schemas and domain types used across the app
 
 ## Core features
@@ -23,42 +22,38 @@ Telegram-first calorie tracking with a database-backed backend, a web dashboard,
    - `DATABASE_URL`
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_ALLOWED_USER_IDS`
-   - `DEFAULT_DASHBOARD_TELEGRAM_ID`
 2. Start Postgres:
 
 ```bash
 docker compose up -d
 ```
 
-3. Generate the Prisma client and push the schema:
+1. Generate the Prisma client and push the schema:
 
 ```bash
 npm run prisma:generate
 npm run db:push
 ```
 
-4. Seed a starter user and sample favourite:
+1. Seed a starter user and sample favourite:
 
 ```bash
 npm run seed
 ```
 
-5. Run the backend and dashboard:
+1. Run the backend:
 
 ```bash
 npm run dev:api
-npm run dev:dashboard
 ```
 
-6. [For devs] Visualise backend data with: `npx prisma studio --schema apps/api/prisma/schema.prisma`
-
-2. Visualise dashboard data with: `npm run dev:dashboard`
+1. [For devs] Visualise backend data with: `npx prisma studio --schema apps/api/prisma/schema.prisma`
 
 ## Google Sheets migration
 
 Export the sheet as CSV, then run:
 
-```bash`
+```bash
 IMPORT_FILE="/absolute/path/to/export.csv" npm run import:csv
 ```
 

@@ -8,9 +8,8 @@
   ],
   "scripts": {
     "dev:api": "npm run dev -w @kcalculator/api",
-    "dev:dashboard": "npm run dev -w @kcalculator/dashboard",
-    "build": "npm run build -w @kcalculator/shared && npm run build -w @kcalculator/api && npm run build -w @kcalculator/dashboard",
-    "lint": "npm run lint -w @kcalculator/dashboard",
+    "build": "npm run build -w @kcalculator/shared && npm run build -w @kcalculator/api",
+    "lint": "npm run lint -w @kcalculator/api",
     "test": "vitest",
     "prisma:generate": "npm run prisma:generate -w @kcalculator/api",
     "db:push": "npm run prisma:push -w @kcalculator/api",

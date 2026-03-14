@@ -1,13 +1,10 @@
 import type { Context } from "telegraf";
 import type { Telegraf } from "telegraf";
-import { Markup } from "telegraf";
 import { prisma } from "../lib/prisma.js";
-import { env } from "../config/env.js";
 import {
   getDashboardAnalytics,
   getDaySummaryText,
 } from "../services/analytics.js";
-import { issueDashboardToken } from "../services/dashboard-token.js";
 
 type RequireUser = (ctx: Context) => Promise<{ id: string } | null>;
 
@@ -42,8 +39,10 @@ export function registerStatsCommands(
   bot.command("stats", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
+    const daysArg =
+      ctx.message.text.replace(/^\/stats(@\w+)?\s*(\d+)?/, "$2").trim() || "30";
 
-    const days = 30;
+    const days = daysArg ? Number(daysArg) : 30;
     const analytics = await getDashboardAnalytics({ userId: user.id, days });
 
     const labels = analytics.trend.map((point) => point.date.slice(5)); // MM-DD for brevity

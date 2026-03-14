@@ -32,7 +32,6 @@ function pick(row: Record<string, string>, keys: string[]) {
 async function main() {
   const importFile = process.env.IMPORT_FILE;
   const telegramId =
-    env.DEFAULT_DASHBOARD_TELEGRAM_ID ||
     env.TELEGRAM_ALLOWED_USER_IDS.split(",")[0]?.trim();
 
   if (!importFile) {
@@ -40,7 +39,7 @@ async function main() {
   }
 
   if (!telegramId) {
-    throw new Error("Set DEFAULT_DASHBOARD_TELEGRAM_ID before importing.");
+    throw new Error("Set TELEGRAM_ALLOWED_USER_IDS before importing.");
   }
 
   const csv = await readFile(importFile, "utf8");
