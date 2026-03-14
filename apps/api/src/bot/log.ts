@@ -210,16 +210,7 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const match = ctx.message.text.match(/\/editlast(@\w+)?\s+(\d{2,5})/);
-    if (!match) {
-      await ctx.reply(
-        "Use `/editlast 650` to update the most recent entry calories.",
-        {
-          parse_mode: "Markdown",
-        },
-      );
-      return;
-    }
+    const caloriesMatch = ctx.message.text.match(/(\d{2,5})\s*(kcal|cal)?\b/);
 
     const lastEntry = await prisma.mealEntry.findFirst({
       where: { userId: user.id },
@@ -231,12 +222,23 @@ export function registerLogCommands(
       return;
     }
 
+    if (!caloriesMatch) {
+      await ctx.reply(
+        `The last entry was ${lastEntry.foodName} with ${lastEntry.calories} kcal.`,
+        {
+          parse_mode: "Markdown",
+        },
+      );
+      return;
+    }
+
+    const calories = Number(caloriesMatch[1]);
     await prisma.mealEntry.update({
       where: { id: lastEntry.id },
-      data: { calories: Number(match[2]) },
+      data: { calories },
     });
 
-    await ctx.reply(`Updated ${lastEntry.foodName} to ${match[2]} kcal.`);
+    await ctx.reply(`Updated ${lastEntry.foodName} to ${calories} kcal.`);
   });
 
   bot.action(/log-favourite:(.+)/, async (ctx) => {
