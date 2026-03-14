@@ -66,6 +66,67 @@ async function getFavouritesKeyboard(
   return Markup.inlineKeyboard(rows);
 }
 
+
+async function handleLogInput(
+  ctx: Context,
+  id: string,
+  timezone: string,
+  text: string,
+): Promise<void> {
+  const parsed = await parseLogMessage(text, timezone);
+  if (!parsed.foodName) {
+    await ctx.reply(LOG_MENU_MESSAGE, {
+      parse_mode: "Markdown",
+      ...(await getFavouritesKeyboard(id)),
+    });
+    return;
+  }
+
+  // 1. use explicit food name and calories if given
+  if (parsed.foodName && parsed.calories) {
+    sessions.set(ctx.chat!.id, { kind: "parse-confirm", payload: parsed });
+      await ctx.reply(
+        `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback("Save", "parse-confirm"),
+            Markup.button.callback("Cancel", "parse-reject"),
+          ],
+        ]),
+      );
+      return;
+    }
+    
+    // 2. use favourite if name matches and no calories given
+    const favourite = await prisma.food.findFirst({
+      where: { userId: id, name: parsed.foodName },
+    });
+    if (favourite) {
+      await prisma.mealEntry.create({
+        data: {
+        userId: id,
+        foodId: favourite.id,
+        entryDate: dateKeyToUtcMidnight(parsed.entryDate),
+        foodName: favourite.name,
+        calories: favourite.defaultCalories,
+        source: "favourite",
+      },
+    });
+    await ctx.reply(
+      `Logged ${favourite.name} for ${favourite.defaultCalories} kcal.`,
+    );
+    return;
+  }
+
+  await ctx.reply(
+    `Don't play play leh, I couldn't find ${parsed.foodName} in your favourites. Use /addfav to add it first.`,
+    {
+      parse_mode: "Markdown",
+      ...(await getFavouritesKeyboard(id)),
+    },
+  );
+}
+
 export function registerLogCommands(
   bot: Telegraf<Context>,
   requireUser: RequireUser,
@@ -82,60 +143,29 @@ export function registerLogCommands(
       });
       return;
     }
+    await handleLogInput(ctx, user.id, user.timezone, args);
+  });
 
-    const parsed = await parseLogMessage(args, user.timezone);
-    if (!parsed.foodName) {
-      await ctx.reply(LOG_MENU_MESSAGE, {
-        parse_mode: "Markdown",
-        ...(await getFavouritesKeyboard(user.id)),
-      });
-      return;
+  bot.on(message("text"), async (ctx, next) => {
+    if (ctx.message.text.startsWith("/")) {
+      return next();
     }
 
-    // 1. use explicit food name and calories if given
-    if (parsed.foodName && parsed.calories) {
-      sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
-      await ctx.reply(
-        `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback("Save", "parse-confirm"),
-            Markup.button.callback("Cancel", "parse-reject"),
-          ],
-        ]),
-      );
-      return;
-    } else if (parsed.foodName && !parsed.calories) {
-      // 2. use favourite if name matches and no calories given
-      const favourite = await prisma.food.findFirst({
-        where: { userId: user.id, name: parsed.foodName },
-      });
+    const user = await requireUser(ctx);
+    if (!user) return;
 
-      if (favourite) {
-        await prisma.mealEntry.create({
-          data: {
-            userId: user.id,
-            foodId: favourite.id,
-            entryDate: dateKeyToUtcMidnight(parsed.entryDate),
-            foodName: favourite.name,
-            calories: favourite.defaultCalories,
-            source: "favourite",
-          },
-        });
+    const parsed = await parseLogMessage(ctx.message.text, user.timezone);
+    await prisma.parserAudit.create({
+      data: {
+        userId: user.id,
+        rawMessage: ctx.message.text,
+        parsedPayload: parsed,
+        confidence: parsed.confidence,
+        accepted: null,
+      },
+    });
 
-        await ctx.reply(
-          `Logged ${favourite.name} for ${favourite.defaultCalories} kcal.`,
-        );
-        return;
-      } else {
-        await ctx.reply(
-          `Don't play play leh, I couldn't find ${parsed.foodName} in your favourites. Use /addfav to add it first.`, {
-          parse_mode: "Markdown",
-          ...(await getFavouritesKeyboard(user.id)),
-        });
-        return;
-      }
-    }
+    await handleLogInput(ctx, user.id, user.timezone, ctx.message.text);
   });
 
   bot.command("fav", async (ctx) => {
@@ -294,42 +324,4 @@ export function registerLogCommands(
     await ctx.reply("Cancelled. Don't anyhow ah...");
   });
 
-  bot.on(message("text"), async (ctx, next) => {
-    if (ctx.message.text.startsWith("/")) {
-      return next();
-    }
-
-    const user = await requireUser(ctx);
-    if (!user) return;
-
-    const parsed = await parseLogMessage(ctx.message.text, user.timezone);
-    await prisma.parserAudit.create({
-      data: {
-        userId: user.id,
-        rawMessage: ctx.message.text,
-        parsedPayload: parsed,
-        confidence: parsed.confidence,
-        accepted: null,
-      },
-    });
-
-    if (!parsed.foodName || !parsed.calories || parsed.confidence < 0.7) {
-      await ctx.reply(
-        "I could not confidently parse that. Please include a food name and calories, like `chicken rice 650`.",
-        { parse_mode: "Markdown" },
-      );
-      return;
-    }
-
-    sessions.set(ctx.chat.id, { kind: "parse-confirm", payload: parsed });
-    await ctx.reply(
-      `I parsed: ${parsed.foodName} - ${parsed.calories} kcal. Save it?`,
-      Markup.inlineKeyboard([
-        [
-          Markup.button.callback("Save", "parse-confirm"),
-          Markup.button.callback("Cancel", "parse-reject"),
-        ],
-      ]),
-    );
-  });
 }
