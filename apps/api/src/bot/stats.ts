@@ -45,9 +45,19 @@ export function registerStatsCommands(
     const days = daysArg ? Number(daysArg) : 30;
     const analytics = await getDashboardAnalytics({ userId: user.id, days });
 
-    const labels = analytics.trend.map((point) => point.date.slice(5)); // MM-DD for brevity
+    const labels = analytics.trend.map((point) => point.date.slice(5));
     const caloriesData = analytics.trend.map((point) => point.calories);
     const targetData = analytics.trend.map((point) => point.target);
+    const barBackgroundColors = analytics.trend.map((point) =>
+      point.calories > point.target
+        ? "rgba(255, 99, 132, 0.6)" // red when exceeded
+        : "rgba(54, 162, 235, 0.6)", // blue when did not exceed
+    );
+    const barBorderColors = analytics.trend.map((point) =>
+      point.calories > point.target
+        ? "rgba(255, 99, 132, 1)"
+        : "rgba(54, 162, 235, 1)",
+    );
 
     const chartConfig = {
       type: "bar",
@@ -67,8 +77,8 @@ export function registerStatsCommands(
             type: "bar",
             label: "Calories",
             data: caloriesData,
-            backgroundColor: "rgba(255, 99, 132, 0.6)",
-            borderColor: "rgba(255, 99, 132, 1)",
+            backgroundColor: barBackgroundColors,
+            borderColor: barBorderColors,
             borderWidth: 1,
           },
         ],
