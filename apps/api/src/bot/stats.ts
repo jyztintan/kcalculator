@@ -128,7 +128,7 @@ export function registerStatsCommands(
     await ctx.replyWithPhoto(
       { url: chartUrl },
       {
-        caption: `Here is your last ${days} days boi. `,
+        caption: `Here is your chart for the last ${days} days.`,
       },
     );
   });
