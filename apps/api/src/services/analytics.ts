@@ -158,18 +158,25 @@ export async function getTodaySummaryText(userId: string) {
 
   const linesToday =
     entries.length === 0
-      ? ["(no entries yet)"]
+      ? ["hungry boi... haven't eat yet ah?"]
       : entries.map(
           (e: { foodName: string; calories: number }) =>
             `- ${e.foodName} (${e.calories} kcal)`,
         );
 
+  const scolding =
+    summary.todayCalories > summary.todayTarget
+      ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
+      : "";
+
   return [
-    "Logged today:",
+    "Let's see how much you devoured today...",
     ...linesToday,
     "",
+    `${scolding}`,
     `Today: ${summary.todayCalories}/${summary.todayTarget} kcal`,
     `Remaining: ${summary.todayRemaining} kcal`,
+    "",
     `7-day avg: ${summary.weeklyAverage} kcal`,
     `Hit days: ${summary.hitDays}, Missed days: ${summary.missedDays}`,
   ].join("\n");
