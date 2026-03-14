@@ -63,6 +63,7 @@ async function main() {
     const calories = Number(rawCalories);
 
     if (!Number.isFinite(calories) || calories <= 0) {
+      console.log(`Skipping row with invalid calories: ${rawDate} ${rawFood} ${rawCalories}`);
       continue;
     }
 
