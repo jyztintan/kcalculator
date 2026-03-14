@@ -57,11 +57,11 @@ export async function parseLogMessage(message: string, timezone: string) {
   const normalized = message.trim().toLowerCase();
   const rawFoodName = normalized
     .replace(/^(had|ate|log|logged)\s+/, "")
-    .replace(/(\d{2,5})\s*(kcal|cal)?\b/g, "")
+    .replace(/(-?\d{2,5})\s*(kcal|cal)?\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
   const foodName = rawFoodName || undefined;
-  const caloriesMatch = normalized.match(/(\d{2,5})\s*(kcal|cal)?\b/);
+  const caloriesMatch = normalized.match(/(-?\d{2,5})\s*(kcal|cal)?\b/);
 
   return {
     entryDate: getLocalDateKey(timezone),

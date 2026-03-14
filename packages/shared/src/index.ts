@@ -9,14 +9,14 @@ export const mealEntryCreateSchema = z.object({
   userId: z.string().cuid(),
   entryDate: z.string(),
   foodName: z.string().min(1),
-  calories: z.number().int().positive(),
+  calories: z.number().int(),
   source: z.enum(["manual", "favourite", "parsed"]).default("manual"),
 });
 
 export const foodCreateSchema = z.object({
   userId: z.string().cuid(),
   name: z.string().min(1),
-  defaultCalories: z.number().int().positive(),
+  defaultCalories: z.number().int(),
 });
 
 export const reminderCreateSchema = z.object({
@@ -33,7 +33,7 @@ export const parseLogResultSchema = z.object({
   confidence: z.number().min(0).max(1),
   entryDate: z.string(),
   foodName: z.string().optional(),
-  calories: z.number().int().positive().optional(),
+  calories: z.number().int().optional(),
   clarification: z.string().optional(),
 });
 

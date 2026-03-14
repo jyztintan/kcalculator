@@ -72,5 +72,15 @@ describe("parseLogMessage", () => {
     expect(result.calories).toBeUndefined();
     expect(result.entryDate).toBe(getLocalDateKey(timezone));
   });
+
+  it("extracts negative calories for exercise", async () => {
+    const timezone = "Asia/Singapore";
+    const message = "running -300";
+
+    const result = await parseLogMessage(message, timezone);
+
+    expect(result.foodName).toBe("running");
+    expect(result.calories).toBe(-300);
+  });
 });
 

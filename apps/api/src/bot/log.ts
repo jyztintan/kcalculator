@@ -185,7 +185,7 @@ export function registerLogCommands(
       return;
     }
 
-    const match = args.match(/^(.+)\s+(\d{2,5})$/);
+    const match = args.match(/^(.+)\s+(-?\d{2,5})$/);
     if (!match) {
       await ctx.reply(
         "Invalid format. Use `/addfav <food> <calories>` to add a favourite.",
@@ -210,7 +210,7 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const caloriesMatch = ctx.message.text.match(/(\d{2,5})\s*(kcal|cal)?\b/);
+    const caloriesMatch = ctx.message.text.match(/(-?\d{2,5})\s*(kcal|cal)?\b/);
 
     const lastEntry = await prisma.mealEntry.findFirst({
       where: { userId: user.id },
