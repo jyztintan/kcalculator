@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import {
   getDashboardAnalytics,
   getDaySummaryText,
+  getMonthSummaryText,
+  getWeekSummaryText,
 } from "../services/analytics.js";
 
 type RequireUser = (ctx: Context) => Promise<{ id: string } | null>;
@@ -24,16 +26,14 @@ export function registerStatsCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const analytics = await getDashboardAnalytics({ userId: user.id, days: 7 });
-    await ctx.reply(
-      [
-        `Tracked days: ${analytics.summary.trackedDays}`,
-        `Hit days: ${analytics.summary.hitDays}`,
-        `Missed days: ${analytics.summary.missedDays}`,
-        `Avg calories: ${analytics.summary.weeklyAverage}`,
-        `Adherence: ${(analytics.summary.adherenceRate * 100).toFixed(0)}%`,
-      ].join("\n"),
-    );
+    await ctx.reply(await getWeekSummaryText(user.id));
+  });
+
+  bot.command("month", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    await ctx.reply(await getMonthSummaryText(user.id));
   });
 
   bot.command("stats", async (ctx) => {
@@ -108,7 +108,10 @@ export function registerStatsCommands(
       },
     };
 
-    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(
+    // Cap dimensions so Telegram accepts (PHOTO_INVALID_DIMENSIONS); aspect ratio must be ≤20:1
+    const width = 1280;
+    const height = 640;
+    const chartUrl = `https://quickchart.io/chart?w=${width}&h=${height}&devicePixelRatio=1&c=${encodeURIComponent(
       JSON.stringify(chartConfig),
     )}`;
 

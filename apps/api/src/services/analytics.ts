@@ -140,7 +140,10 @@ function resolveDateKey(timezone: string, dateArg: string | undefined): string {
   if (!dateArg || dateArg.toLowerCase() === "today") return todayKey;
   if (dateArg.toLowerCase() === "yesterday")
     return addDaysToDateKey(normalizeDateKey(todayKey), -1);
-  if (/^\d{2}-\d{2}-\d{4}$/.test(dateArg) || /^\d{4}-\d{2}-\d{2}$/.test(dateArg))
+  if (
+    /^\d{2}-\d{2}-\d{4}$/.test(dateArg) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(dateArg)
+  )
     return dateArg;
   return "";
 }
@@ -204,12 +207,18 @@ export async function getDaySummaryText(
             `- ${e.foodName} (${e.calories} kcal)`,
         );
 
-  const message = formatDayText(lines, totalCalories, dayLabel, target, remaining);
+  const message = formatDayText(
+    lines,
+    totalCalories,
+    dayLabel,
+    target,
+    remaining,
+  );
   const scolding =
     totalCalories > target
       ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
       : "";
-  if ((dateKeyNorm === todayKeyNorm) && (totalCalories > target)) {
+  if (dateKeyNorm === todayKeyNorm && totalCalories > target) {
     return `${message}${scolding}`;
   }
   return message;
@@ -221,39 +230,91 @@ export async function getWeekSummaryText(userId: string): Promise<string> {
   });
   const timezone = user?.timezone ?? "UTC";
   const todayKey = getLocalDateKey(timezone);
+  const today = dateKeyToUtcMidnight(todayKey);
+  const target = user?.defaultCalorieTarget ?? 0;
 
-  const start = dateKeyToUtcMidnight(todayKey);
-  const end = addDays(start, 7);
+  const startDate = addDays(today, -6);
+  const endDate = addDays(today, 1);
 
   const analytics = await getDashboardAnalytics({ userId, days: 7 });
+  const dayBlocks: string[] = [];
 
-  const entries = await prisma.mealEntry.findMany({
-    where: {
-      userId,
-      entryDate: { gte: start, lt: end },
-    },
-    orderBy: { createdAt: "asc" },
-    select: { foodName: true, calories: true },
-  });
+  for (
+    let cursor = new Date(startDate);
+    cursor < endDate;
+    cursor = addDays(cursor, 1)
+  ) {
+    const dateKey = cursor.toISOString().slice(0, 10);
+    const dayStart = new Date(cursor);
+    const dayEnd = addDays(dayStart, 1);
+    const dayLabel = formatDayLabel(timezone, dateKey, todayKey);
 
-  const lines =
-    entries.length === 0
-      ? ["hungry boi... never eat ah?"]
-      : entries.map(
-          (e: { foodName: string; calories: number }) =>
-            `- ${e.foodName} (${e.calories} kcal)`,
-        );
+    const entries = await prisma.mealEntry.findMany({
+      where: {
+        userId,
+        entryDate: { gte: dayStart, lt: dayEnd },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { foodName: true, calories: true },
+    });
 
-  return lines.join("\n");
+    const totalCalories = entries.reduce(
+      (sum: number, e: { calories: number }) => sum + e.calories,
+      0,
+    );
+    const remaining = Math.max(0, target - totalCalories);
+    const lines =
+      entries.length === 0
+        ? ["hungry boi... never eat ah?"]
+        : entries.map(
+            (e: { foodName: string; calories: number }) =>
+              `- ${e.foodName} (${e.calories} kcal)`,
+          );
+    dayBlocks.push(
+      formatDayText(lines, totalCalories, dayLabel, target, remaining),
+    );
+  }
+
+  const adherenceRate = analytics.summary.adherenceRate * 100;
+  const adherenceRateText =
+    adherenceRate > 85 ? "🤩" : adherenceRate > 50 ? "🤨" : "💩";
+  const summary = [
+    "===========================",
+    "===========================",
+    `Hit days: ${analytics.summary.hitDays}`,
+    `Missed days: ${analytics.summary.missedDays}`,
+    `Avg calories: ${analytics.summary.weeklyAverage}`,
+    `Adherence: ${adherenceRate.toFixed(2)}% ${adherenceRateText}`,
+  ].join("\n");
+  return dayBlocks.join("\n") + "\n" + summary;
 }
 
-function formatDayText(lines: string[], totalCalories: number, dateLabel: string, target: number, remaining: number) {
-    return [
-      `bro you devoured ${totalCalories} kcal on ${dateLabel}`,
-      ...lines,
-      "",
-      `Total: ${totalCalories}/${target} kcal`,
-      `Remaining: ${remaining} kcal`,
-      "",
-    ].join("\n");
+export async function getMonthSummaryText(userId: string): Promise<string> {
+  const analytics = await getDashboardAnalytics({ userId: userId, days: 30 });
+  const adherenceRate = analytics.summary.adherenceRate * 100;
+  const adherenceRateText =
+    adherenceRate > 85 ? "🤩" : adherenceRate > 50 ? "🤨" : "💩";
+  return [
+    `Hit days: ${analytics.summary.hitDays}`,
+    `Missed days: ${analytics.summary.missedDays}`,
+    `Avg calories: ${analytics.summary.weeklyAverage}`,
+    `Adherence: ${adherenceRate.toFixed(2)}% ${adherenceRateText}`,
+  ].join("\n");
+}
+
+function formatDayText(
+  lines: string[],
+  totalCalories: number,
+  dateLabel: string,
+  target: number,
+  remaining: number,
+) {
+  return [
+    `bro you devoured ${totalCalories} kcal on ${dateLabel}`,
+    ...lines,
+    "",
+    `Total: ${totalCalories}/${target} kcal`,
+    `Remaining: ${remaining} kcal`,
+    "",
+  ].join("\n");
 }
