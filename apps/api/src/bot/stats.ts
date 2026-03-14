@@ -39,6 +39,77 @@ export function registerStatsCommands(
     );
   });
 
+  bot.command("stats", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    const days = 30;
+    const analytics = await getDashboardAnalytics({ userId: user.id, days });
+
+    const labels = analytics.trend.map((point) => point.date.slice(5)); // MM-DD for brevity
+    const caloriesData = analytics.trend.map((point) => point.calories);
+    const targetData = analytics.trend.map((point) => point.target);
+
+    const chartConfig = {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            type: "line",
+            label: "Target",
+            data: targetData,
+            borderColor: "rgba(0, 0, 0, 0.8)",
+            borderWidth: 2,
+            fill: false,
+            pointRadius: 0,
+          },
+          {
+            type: "bar",
+            label: "Calories",
+            data: caloriesData,
+            backgroundColor: "rgba(255, 99, 132, 0.6)",
+            borderColor: "rgba(255, 99, 132, 1)",
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          legend: {
+            position: "top",
+          },
+          title: {
+            display: true,
+            text: `Last ${days} days calories`,
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              maxRotation: 90,
+              minRotation: 45,
+            },
+          },
+          y: {
+            beginAtZero: true,
+          },
+        },
+      },
+    };
+
+    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(
+      JSON.stringify(chartConfig),
+    )}`;
+
+    await ctx.replyWithPhoto(
+      { url: chartUrl },
+      {
+        caption: `Here is your last ${days} days boi. `,
+      },
+    );
+  });
+
   bot.command("goal", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
@@ -59,47 +130,4 @@ export function registerStatsCommands(
     await ctx.reply(`Your daily target is now ${match[2]} kcal.`);
   });
 
-  bot.command("stats", async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) return;
-
-    const analytics = await getDashboardAnalytics({
-      userId: user.id,
-      days: 100,
-    });
-
-    const dashboardUrl = env.DASHBOARD_PUBLIC_URL?.trim();
-
-    if (!dashboardUrl) {
-      await ctx.reply(
-        [
-          "Dashboard link not configured.",
-          "Set `DASHBOARD_PUBLIC_URL` in your API env.",
-          "",
-          `Stats: ${analytics.summary.trackedDays} tracked days, avg ${analytics.summary.weeklyAverage} kcal`,
-        ].join("\n"),
-      );
-      return;
-    }
-
-    const telegramId = String(ctx.from?.id ?? "");
-    if (!telegramId) {
-      await ctx.reply(
-        "Could not determine your Telegram ID for dashboard auth.",
-      );
-      return;
-    }
-
-    const token = issueDashboardToken({
-      telegramId,
-      expiresInSeconds: 60 * 60 * 24 * 7, // 7 days
-    });
-
-    const url = new URL(dashboardUrl);
-    url.searchParams.set("token", token);
-
-    await ctx.reply("Dashboard:", Markup.inlineKeyboard([
-      [Markup.button.url("Open dashboard", url.toString())],
-    ]));
-  });
 }

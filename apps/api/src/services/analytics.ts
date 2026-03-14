@@ -208,11 +208,6 @@ export async function getDaySummaryText(
             `- ${e.foodName} (${e.calories} kcal)`,
         );
 
-  const scolding =
-    totalCalories > target
-      ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
-      : "";
-
   if (dateKeyNorm !== todayKeyNorm) {
     return [
       `bro you devoured ${totalCalories} kcal on ${dayLabel}:`,
@@ -222,7 +217,12 @@ export async function getDaySummaryText(
       `Remaining: ${remaining} kcal`,
     ].join("\n");
   }
+  
   const analytics = await getDashboardAnalytics({ userId, days: 7 });
+  const scolding =
+    totalCalories > target
+      ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
+      : "";
   return [
     "Let's see how much you devoured today...",
     ...lines,
