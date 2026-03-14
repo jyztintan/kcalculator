@@ -53,7 +53,7 @@ async function getFavouritesKeyboard(
   const rows = favourites.map(
     (food: { id: string; name: string; defaultCalories: number }) => [
       Markup.button.callback(
-        `${food.name} (${food.defaultCalories})`,
+        `${food.name} with ${food.defaultCalories} kcal`,
         `log-favourite:${food.id}`,
       ),
     ],
@@ -65,7 +65,6 @@ async function getFavouritesKeyboard(
 
   return Markup.inlineKeyboard(rows);
 }
-
 
 async function handleLogInput(
   ctx: Context,
@@ -85,35 +84,31 @@ async function handleLogInput(
   // 1. use explicit food name and calories if given
   if (parsed.foodName && parsed.calories) {
     sessions.set(ctx.chat!.id, { kind: "parse-confirm", payload: parsed });
-      await ctx.reply(
-        `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback("Save", "parse-confirm"),
-            Markup.button.callback("Cancel", "parse-reject"),
-          ],
-        ]),
-      );
-      return;
-    }
-    
-    // 2. use favourite if name matches and no calories given
-    const favourite = await prisma.food.findFirst({
-      where: { userId: id, name: parsed.foodName },
-    });
-    if (favourite) {
-      await prisma.mealEntry.create({
-        data: {
-        userId: id,
-        foodId: favourite.id,
-        entryDate: dateKeyToUtcMidnight(parsed.entryDate),
-        foodName: favourite.name,
-        calories: favourite.defaultCalories,
-        source: "favourite",
-      },
-    });
     await ctx.reply(
-      `Logged ${favourite.name} for ${favourite.defaultCalories} kcal.`,
+      `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback("Save", "parse-confirm"),
+          Markup.button.callback("Cancel", "parse-reject"),
+        ],
+      ]),
+    );
+    return;
+  }
+
+  // 2. use favourite if name matches and no calories given
+  const favourite = await prisma.food.findFirst({
+    where: { userId: id, name: parsed.foodName },
+  });
+  if (favourite) {
+    await ctx.reply(
+      `Eh found your favourite: ${favourite.name} with ${favourite.defaultCalories} kcal`,
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback("Save", "parse-confirm"),
+          Markup.button.callback("Cancel", "parse-reject"),
+        ],
+      ]),
     );
     return;
   }
@@ -125,6 +120,7 @@ async function handleLogInput(
       ...(await getFavouritesKeyboard(id)),
     },
   );
+  return;
 }
 
 export function registerLogCommands(
@@ -255,7 +251,13 @@ export function registerLogCommands(
 
     const todayKey = getLocalDateKey(user.timezone);
 
-    await createMealEntry(user.id, todayKey, food.name, food.defaultCalories, "favourite");
+    await createMealEntry(
+      user.id,
+      todayKey,
+      food.name,
+      food.defaultCalories,
+      "favourite",
+    );
 
     await ctx.answerCbQuery();
     await ctx.reply(`Logged ${food.name} for ${food.defaultCalories} kcal.`);
@@ -275,7 +277,8 @@ export function registerLogCommands(
       return;
     }
 
-    await createMealEntry(user.id, 
+    await createMealEntry(
+      user.id,
       session.payload.entryDate,
       session.payload.foodName,
       session.payload.calories,
@@ -323,5 +326,4 @@ export function registerLogCommands(
     await ctx.answerCbQuery();
     await ctx.reply("Cancelled. Don't anyhow ah...");
   });
-
 }
