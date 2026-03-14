@@ -24,7 +24,7 @@ if (bot) {
       { command: "log", description: "Log a food entry (or free-text parse)" },
       { command: "fav", description: "Choose a favourite to log" },
       { command: "addfav", description: "Add a favourite (food + calories)" },
-      { command: "today", description: "Show today’s summary" },
+      { command: "day", description: "Show today’s summary" },
       { command: "week", description: "Show this week’s summary" },
       { command: "stats", description: "Dashboard link + longer stats" },
       { command: "goal", description: "Set daily calorie target" },

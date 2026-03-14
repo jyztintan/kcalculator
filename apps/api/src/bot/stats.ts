@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
 import {
   getDashboardAnalytics,
-  getTodaySummaryText,
+  getDaySummaryText,
 } from "../services/analytics.js";
 import { issueDashboardToken } from "../services/dashboard-token.js";
 
@@ -15,11 +15,12 @@ export function registerStatsCommands(
   bot: Telegraf<Context>,
   requireUser: RequireUser,
 ) {
-  bot.command("today", async (ctx) => {
+  bot.command("day", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
 
-    await ctx.reply(await getTodaySummaryText(user.id));
+    const arg = ctx.message.text.replace(/^\/day(@\w+)?\s*/, "").trim() || undefined;
+    await ctx.reply(await getDaySummaryText(user.id, arg));
   });
 
   bot.command("week", async (ctx) => {

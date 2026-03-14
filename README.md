@@ -10,7 +10,7 @@ Telegram-first calorie tracking with a database-backed backend, a web dashboard,
 
 ## Core features
 
-- Telegram commands for `/start`, `/log`, `/today`, `/week`, `/goal`, `/reminders`, and `/editlast`
+- Telegram commands for `/start`, `/log`, `/day`, `/week`, `/goal`, `/reminders`, and `/editlast`
 - Structured logging flow with inline buttons and favourite foods
 - Natural-language fallback with explicit confirmation before saving
 - Postgres data model for users, foods, meal entries, reminders, and parse audit history

@@ -1,5 +1,11 @@
 import { prisma } from "../lib/prisma.js";
-import { addDays, dateKeyToUtcMidnight, getLocalDateKey } from "./dates.js";
+import {
+  addDays,
+  addDaysToDateKey,
+  dateKeyToUtcMidnight,
+  getLocalDateKey,
+  normalizeDateKey,
+} from "./dates.js";
 
 type AnalyticsInput = {
   userId: string;
@@ -93,7 +99,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
       targetHit: metGoal ? calories : 0,
       targetMissed: calories > target ? calories : 0,
       exceededBy,
-      remaining
+      remaining,
     });
   }
 
@@ -106,11 +112,12 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
       todayCalories,
       todayTarget,
       todayRemaining: Math.max(todayTarget - todayCalories, 0),
-      weeklyAverage: activeDays === 0 ? 0 : Math.round(totalCalories / activeDays),
+      weeklyAverage:
+        activeDays === 0 ? 0 : Math.round(totalCalories / activeDays),
       adherenceRate,
       hitDays,
       missedDays,
-      trackedDays: activeDays
+      trackedDays: activeDays,
     },
     trend,
     topFoods: recentFoods.map(
@@ -127,57 +134,103 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
   };
 }
 
-export async function getTodaySummaryText(userId: string) {
+/** Resolve dateArg to a date key (YYYY-MM-DD or DD-MM-YYYY). "" | "today" → today, "yesterday" → yesterday, or a date string. */
+function resolveDateKey(timezone: string, dateArg: string | undefined): string {
+  const todayKey = getLocalDateKey(timezone);
+  if (!dateArg || dateArg.toLowerCase() === "today") return todayKey;
+  if (dateArg.toLowerCase() === "yesterday")
+    return addDaysToDateKey(normalizeDateKey(todayKey), -1);
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateArg) || /^\d{4}-\d{2}-\d{2}$/.test(dateArg))
+    return dateArg;
+  return "";
+}
+
+function formatDayLabel(
+  timezone: string,
+  dateKey: string,
+  todayKey: string,
+): string {
+  const key = normalizeDateKey(dateKey);
+  const todayNorm = normalizeDateKey(todayKey);
+  if (key === todayNorm) return "Today";
+  const yesterdayNorm = addDaysToDateKey(todayNorm, -1);
+  if (key === yesterdayNorm) return "Yesterday";
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: timezone,
+  });
+}
+
+export async function getDaySummaryText(
+  userId: string,
+  dateArg?: string,
+): Promise<string> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
 
   const timezone = user?.timezone ?? "UTC";
   const todayKey = getLocalDateKey(timezone);
-  const today = dateKeyToUtcMidnight(todayKey);
-  const tomorrow = addDays(today, 1);
+  const dateKey = resolveDateKey(timezone, dateArg);
+  if (!dateKey) return "Invalid date format. Use YYYY-MM-DD or DD-MM-YYYY.";
+  const dayLabel = formatDayLabel(timezone, dateKey, todayKey);
 
-  const [analytics, entries] = await Promise.all([
-    getDashboardAnalytics({ userId, days: 7 }),
-    prisma.mealEntry.findMany({
-      where: {
-        userId,
-        entryDate: {
-          gte: today,
-          lt: tomorrow,
-        },
-      },
-      orderBy: { createdAt: "asc" },
-      select: {
-        foodName: true,
-        calories: true,
-      },
-    }),
-  ]);
-  const summary = analytics.summary;
+  const start = dateKeyToUtcMidnight(dateKey);
+  const end = addDays(start, 1);
+  const dateKeyNorm = normalizeDateKey(dateKey);
+  const todayKeyNorm = normalizeDateKey(todayKey);
 
-  const linesToday =
+  const entries = await prisma.mealEntry.findMany({
+    where: {
+      userId,
+      entryDate: { gte: start, lt: end },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { foodName: true, calories: true },
+  });
+
+  const totalCalories = entries.reduce(
+    (sum: number, e: { calories: number }) => sum + e.calories,
+    0,
+  );
+  const target = user?.defaultCalorieTarget ?? 0;
+  const remaining = Math.max(0, target - totalCalories);
+
+  const lines =
     entries.length === 0
-      ? ["hungry boi... haven't eat yet ah?"]
+      ? ["hungry boi... never eat ah?"]
       : entries.map(
           (e: { foodName: string; calories: number }) =>
             `- ${e.foodName} (${e.calories} kcal)`,
         );
 
   const scolding =
-    summary.todayCalories > summary.todayTarget
+    totalCalories > target
       ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
       : "";
 
+  if (dateKeyNorm !== todayKeyNorm) {
+    return [
+      `bro you devoured ${totalCalories} kcal on ${dayLabel}:`,
+      ...lines,
+      "",
+      `Total: ${dayLabel}: ${totalCalories}/${target} kcal`,
+      `Remaining: ${remaining} kcal`,
+    ].join("\n");
+  }
+  const analytics = await getDashboardAnalytics({ userId, days: 7 });
   return [
     "Let's see how much you devoured today...",
-    ...linesToday,
-    "",
+    ...lines,
     `${scolding}`,
-    `Today: ${summary.todayCalories}/${summary.todayTarget} kcal`,
-    `Remaining: ${summary.todayRemaining} kcal`,
+    `Today: ${totalCalories}/${target} kcal`,
+    `Remaining: ${remaining} kcal`,
     "",
-    `7-day avg: ${summary.weeklyAverage} kcal`,
-    `Hit days: ${summary.hitDays}, Missed days: ${summary.missedDays}`,
+    `7-day avg: ${analytics.summary.weeklyAverage} kcal`,
+    `Hit days: ${analytics.summary.hitDays}, Missed days: ${analytics.summary.missedDays}`,
   ].join("\n");
 }

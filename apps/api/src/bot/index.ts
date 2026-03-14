@@ -35,7 +35,7 @@ function getHelpMessage(user: string) {
     `Hello ${user} bui bui 🐷! Here's how you can use this bot to stop being a fatty bom bom: \n
     /log to log a food entry for today, \n
     /fav to choose from favourites to log, \n
-    /today for your daily summary, \n
+    /day for your daily summary, \n
     /week for your weekly summary, \n
     /goal 2200 to set your daily target, \n
     /reminders to view your reminders, \n
