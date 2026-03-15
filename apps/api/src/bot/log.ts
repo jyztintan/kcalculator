@@ -13,10 +13,16 @@ const openai = env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
   : null;
 
-type SessionState = {
-  kind: "parse-confirm";
-  payload: ParseLogResult;
-};
+
+type SessionState =
+  | {
+      kind: "parse-confirm";
+      payload: ParseLogResult;
+    }
+  | {
+      kind: "delete-last-confirm";
+      payload: { foodName: string; entryId: string };
+    };
 
 type RequireUser = (
   ctx: Context,
@@ -162,7 +168,6 @@ export function registerLogCommands(
       );
       return;
     }
-
     var data: {
       food_name: string;
       calories: number;
@@ -333,6 +338,56 @@ export function registerLogCommands(
     });
 
     await ctx.reply(`Updated ${lastEntry.foodName} to ${calories} kcal.`);
+  });
+
+  bot.command("deletelast", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    const lastEntry = await prisma.mealEntry.findFirst({
+      where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!lastEntry) {
+      await ctx.reply("No entries found yet.");
+      return;
+    }
+
+    sessions.set(ctx.chat!.id, {
+      kind: "delete-last-confirm",
+      payload: { foodName: lastEntry.foodName, entryId: lastEntry.id },
+    });
+    await ctx.reply(`You sure you want to delete ${lastEntry.foodName} with ${lastEntry.calories} kcal anot?`, {
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("Yes", "delete-last-confirm")],
+        [Markup.button.callback("No", "delete-last-reject")],
+      ]),
+    });
+  });
+
+  bot.action("delete-last-confirm", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+    const session = sessions.get(ctx.chat!.id);
+    if (!session || session.kind !== "delete-last-confirm" || !session.payload.entryId) {
+      await ctx.answerCbQuery("Nothing to confirm");
+      return;
+    }
+
+    await prisma.mealEntry.delete({
+      where: { id: session.payload.entryId },
+    });
+    sessions.delete(ctx.chat!.id);
+    await ctx.answerCbQuery();
+    await ctx.reply(`Deleted ${session.payload.foodName}.`);
+  });
+
+  bot.action("delete-last-reject", async (ctx) => {
+    sessions.delete(ctx.chat!.id);
+    await ctx.answerCbQuery();
+    await ctx.reply("Cancelled. Don't anyhow ah...");
   });
 
   bot.action(/log-favourite:(.+)/, async (ctx) => {
