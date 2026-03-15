@@ -3,9 +3,15 @@ import type { Context } from "telegraf";
 import { Markup } from "telegraf";
 import { message } from "telegraf/filters";
 import type { Telegraf } from "telegraf";
+import OpenAI from "openai";
+import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { dateKeyToUtcMidnight, getLocalDateKey } from "../services/dates.js";
 import { parseLogMessage } from "../services/parser.js";
+
+const openai = env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+  : null;
 
 type SessionState = {
   kind: "parse-confirm";
@@ -150,18 +156,90 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    // const parsed = await parseLogMessage(ctx.message.text, user.timezone);
-    // await prisma.parserAudit.create({
-    //   data: {
-    //     userId: user.id,
-    //     rawMessage: ctx.message.text,
-    //     parsedPayload: parsed,
-    //     confidence: parsed.confidence,
-    //     accepted: null,
-    //   },
-    // });
+    if (!openai) {
+      await ctx.reply(
+        "I currently don't have the yapping capabilities, try again later...",
+      );
+      return;
+    }
 
-    await handleLogInput(ctx, user.id, user.timezone, ctx.message.text);
+    var data: {
+      food_name: string;
+      calories_min: number;
+      calories_max: number;
+      protein: number;
+      carbohydrates: number;
+      fat: number;
+      reasoning: string;
+      roast: string;
+    };
+    try {
+      const completion = await openai.chat.completions.create({
+        model: env.OPENAI_MODEL,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `
+          You are Fatty Fatty Bom Bom Bot, a calorie-estimating assistant specializing in Singapore hawker food and Chinese cuisine.
+
+          Personality:
+          A loud, cheeky Singapore ah beng gym coach who roasts people for overeating in a funny way.
+
+          Your job:
+          Estimate calories and macros from food descriptions.
+
+          Return ONLY JSON.
+
+          Schema:
+          {
+            "food_name": string,
+            "calories_min": number,
+            "calories_max": number,
+            "protein": number,
+            "carbohydrates": number,
+            "fat": number,
+            "reasoning": string,
+            "roast": string
+          }
+
+          Rules:
+          - food_name must be a short name of the food, no description
+          - calories_min and calories_max must be numbers
+          - protein, carbohydrates, and fat must be numbers
+          - reasoning must briefly explain ingredients, oil, and portion
+          - roast must be funny ah beng Singlish style
+          - roasting should be playful, exaggerated, not hateful
+          - keep reasoning short
+          - do not output anything outside JSON
+          `,
+          },
+          {
+            role: "user",
+            content: ctx.message.text,
+          },
+        ],
+        temperature: 0.8,
+      });
+      data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
+      if (!data.food_name || !data.calories_min || !data.calories_max || !data.protein || !data.carbohydrates || !data.fat) {
+        await ctx.reply("Sorry, please try again.");
+        return;
+      }
+
+      await ctx.reply(`${data.calories_min}-${data.calories_max} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning} \n\n${data.roast}`);
+      
+    } catch (err) {
+      console.error("[bot] OpenAI error:", err);
+      await ctx.reply(
+        "Something went wrong talking to the assistant. Try again later.",
+      );
+      return;
+    }
+
+    const average = (data.calories_min + data.calories_max) / 2
+    const outgoingLogMessage = `${data.food_name} ${Math.round(average)}`;
+    handleLogInput(ctx, user.id, user.timezone, outgoingLogMessage);
   });
 
   bot.command("fav", async (ctx) => {
