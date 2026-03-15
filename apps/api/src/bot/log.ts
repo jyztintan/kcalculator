@@ -165,8 +165,7 @@ export function registerLogCommands(
 
     var data: {
       food_name: string;
-      calories_min: number;
-      calories_max: number;
+      calories: number;
       protein: number;
       carbohydrates: number;
       fat: number;
@@ -194,8 +193,7 @@ export function registerLogCommands(
           Schema:
           {
             "food_name": string,
-            "calories_min": number,
-            "calories_max": number,
+            "calories": number,
             "protein": number,
             "carbohydrates": number,
             "fat": number,
@@ -205,7 +203,8 @@ export function registerLogCommands(
 
           Rules:
           - food_name must be a short name of the food, no description
-          - calories_min and calories_max must be numbers
+          - calories must be a number 
+          - calories should follow user's input if any
           - protein, carbohydrates, and fat must be numbers
           - reasoning must briefly explain ingredients, oil, and portion
           - roast must be funny ah beng Singlish style
@@ -222,12 +221,12 @@ export function registerLogCommands(
         temperature: 0.8,
       });
       data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
-      if (!data.food_name || !data.calories_min || !data.calories_max || !data.protein || !data.carbohydrates || !data.fat) {
-        await ctx.reply("Sorry, please try again.");
+      if (!data.food_name || !data.calories || !data.protein || !data.carbohydrates || !data.fat) {
+        await ctx.reply("Oi! You so fat already still want to anyhow? Give me a valid food description cb.");
         return;
       }
 
-      await ctx.reply(`${data.calories_min}-${data.calories_max} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning} \n\n${data.roast}`);
+      await ctx.reply(`${data.calories} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning} \n\n${data.roast}`);
       
     } catch (err) {
       console.error("[bot] OpenAI error:", err);
@@ -236,9 +235,7 @@ export function registerLogCommands(
       );
       return;
     }
-
-    const average = (data.calories_min + data.calories_max) / 2
-    const outgoingLogMessage = `${data.food_name} ${Math.round(average)}`;
+    const outgoingLogMessage = `${data.food_name} ${data.calories}`;
     handleLogInput(ctx, user.id, user.timezone, outgoingLogMessage);
   });
 
