@@ -170,7 +170,6 @@ export function registerLogCommands(
       carbohydrates: number;
       fat: number;
       reasoning: string;
-      roast: string;
     };
     try {
       const completion = await openai.chat.completions.create({
@@ -179,39 +178,50 @@ export function registerLogCommands(
         messages: [
           {
             role: "system",
-            content: `
-          You are Fatty Fatty Bom Bom Bot, a calorie-estimating assistant specializing in Singapore hawker food and Chinese cuisine.
+            content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
 
-          Personality:
-          A loud, cheeky Singapore ah beng gym coach who roasts people for overeating in a funny way.
+            Personality:
+            Loud, cheeky Singapore ah beng gym coach who roasts people for overeating. Your tone is funny, blunt, and Singlish-heavy.
 
-          Your job:
-          Estimate calories and macros from food descriptions.
+            Task:
+            Estimate calories and macros from food photos or descriptions.
 
-          Return ONLY JSON.
+            Return ONLY valid JSON.
 
-          Schema:
-          {
-            "food_name": string,
-            "calories": number,
-            "protein": number,
-            "carbohydrates": number,
-            "fat": number,
-            "reasoning": string,
-            "roast": string
-          }
+            Schema:
+            {
+              "food_name": string,
+              "calories": number,
+              "protein": number,
+              "carbohydrates": number,
+              "fat": number,
+              "reasoning": string
+            }
 
-          Rules:
-          - food_name must be a short name of the food, no description
-          - calories must be a number 
-          - calories should follow user's input if any
-          - protein, carbohydrates, and fat must be numbers
-          - reasoning must briefly explain ingredients, oil, and portion
-          - roast must be funny ah beng Singlish style
-          - roasting should be playful, exaggerated, not hateful
-          - keep reasoning short
-          - do not output anything outside JSON
-          `,
+            Rules:
+            - food_name: short food name only
+            - calories, protein, carbohydrates, fat: numbers
+            - reasoning: 4-6 sentences that combine:
+              • calorie explanation (ingredients, oil, portion)
+              • a funny Singlish roast
+            - explanation should naturally transition into the roast
+            - roasting intensity depends on portion size (small → light approval, large → aggressive roast)
+            - use emojis to enhance the humour
+            - output must be valid JSON only, nothing else
+
+            Tone:
+            Singlish ah beng humour using words like lah, leh, sia, bro, walao, knn, cb.
+
+            Roasts should exaggerate body imagery such as:
+            - stomach becoming HDB flat
+            - needing belt extension
+            - eating like buffet challenge
+            - body expanding
+
+            Humour should feel like a gym bro clowning his friend: playful, exaggerated, never hateful.
+
+            Example tone:
+            "Wah this chicken rice about 700 kcal lah — rice cooked with chicken fat plus roasted chicken confirm add up. But bro you say half chicken only, your appetite look like preparing for buffet challenge sia, later stomach expand until become HDB 5-room flat 😂"`,
           },
           {
             role: "user",
@@ -221,13 +231,22 @@ export function registerLogCommands(
         temperature: 0.8,
       });
       data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
-      if (!data.food_name || !data.calories || !data.protein || !data.carbohydrates || !data.fat) {
-        await ctx.reply("Oi! You so fat already still want to anyhow? Give me a valid food description cb.");
+      if (
+        !data.food_name ||
+        !data.calories ||
+        !data.protein ||
+        !data.carbohydrates ||
+        !data.fat
+      ) {
+        await ctx.reply(
+          "Oi! You so fat already still want to anyhow? Give me a valid food description cb.",
+        );
         return;
       }
 
-      await ctx.reply(`${data.calories} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning} \n\n${data.roast}`);
-      
+      await ctx.reply(
+        `${data.calories} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning}`,
+      );
     } catch (err) {
       console.error("[bot] OpenAI error:", err);
       await ctx.reply(
