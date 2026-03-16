@@ -7,7 +7,8 @@ import OpenAI from "openai";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { dateKeyToUtcMidnight, getLocalDateKey } from "../services/dates.js";
-import { parseLogMessage } from "../services/parser.js";
+import { parseBacklogMessage, parseLogMessage } from "../services/parser.js";
+import { EntrySource } from "@prisma/client";
 
 const openai = env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
@@ -39,7 +40,7 @@ async function createMealEntry(
   entryDate: string,
   foodName: string,
   calories: number,
-  source: string,
+  source: EntrySource,
 ) {
   return prisma.mealEntry.create({
     data: {
@@ -78,13 +79,12 @@ async function getFavouritesKeyboard(
   return Markup.inlineKeyboard(rows);
 }
 
-async function handleLogInput(
+async function handleParsedInput(
   ctx: Context,
   id: string,
   timezone: string,
-  text: string,
+  parsed: ParseLogResult,
 ): Promise<void> {
-  const parsed = await parseLogMessage(text, timezone);
   if (!parsed.foodName) {
     await ctx.reply(LOG_MENU_MESSAGE, {
       parse_mode: "Markdown",
@@ -113,6 +113,7 @@ async function handleLogInput(
     where: { userId: id, name: parsed.foodName },
   });
   if (favourite) {
+    sessions.set(ctx.chat!.id, { kind: "parse-confirm", payload: { entryDate: getLocalDateKey(timezone), foodName: favourite.name, calories: favourite.defaultCalories, confidence: 0.99 } });
     await ctx.reply(
       `Eh found your favourite: ${favourite.name} with ${favourite.defaultCalories} kcal`,
       Markup.inlineKeyboard([
@@ -135,6 +136,33 @@ async function handleLogInput(
   return;
 }
 
+async function handleLogInput(
+  ctx: Context,
+  id: string,
+  timezone: string,
+  text: string,
+): Promise<void> {
+  const parsed = await parseLogMessage(text, timezone);
+  await handleParsedInput(ctx, id, timezone, parsed);
+}
+
+async function handleBacklogInput(
+  ctx: Context,
+  id: string,
+  timezone: string,
+  text: string,
+): Promise<void> {
+  const parsed = await parseBacklogMessage(text, timezone);
+  if (!parsed) {
+    await ctx.reply(
+      "Use `/backlog YYYY-MM-DD <food> <kcal>` to log a past meal.",
+      { parse_mode: "Markdown" },
+    );
+    return;
+  }
+  await handleParsedInput(ctx, id, timezone, parsed);
+}
+
 export function registerLogCommands(
   bot: Telegraf<Context>,
   requireUser: RequireUser,
@@ -152,6 +180,22 @@ export function registerLogCommands(
       return;
     }
     await handleLogInput(ctx, user.id, user.timezone, args);
+  });
+
+  bot.command("backlog", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    const args = ctx.message.text.replace(/^\/backlog(@\w+)?\s*/, "").trim();
+    if (!args) {
+      await ctx.reply(
+        "Use `/backlog YYYY-MM-DD <food> <kcal>` to log a past meal.",
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    await handleBacklogInput(ctx, user.id, user.timezone, args);
   });
 
   bot.on(message("text"), async (ctx, next) => {
