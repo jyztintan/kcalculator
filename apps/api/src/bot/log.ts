@@ -9,12 +9,11 @@ import { prisma } from "../lib/prisma.js";
 import { dateKeyToUtcMidnight, getLocalDateKey } from "../services/dates.js";
 import { parseBacklogMessage, parseLogMessage } from "../services/parser.js";
 import { EntrySource } from "@prisma/client";
+import { getFavouritesKeyboard } from "./fav.js";
 
 const openai = env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
   : null;
-
-
 type SessionState =
   | {
       kind: "parse-confirm";
@@ -33,9 +32,8 @@ const sessions = new Map<number, SessionState>();
 
 const LOG_MENU_MESSAGE =
   "Send `/log <food> <kcal>` — for example, `/log chicken rice 650` — or choose a favourite:";
-const FAV_MENU_MESSAGE = "Choose a favourite to log, or cancel operation?";
 
-async function createMealEntry(
+export async function createMealEntry(
   userId: string,
   entryDate: string,
   foodName: string,
@@ -51,32 +49,6 @@ async function createMealEntry(
       source: source,
     },
   });
-}
-
-async function getFavouritesKeyboard(
-  userId: string,
-  options: { addCancel?: boolean } = {},
-) {
-  const favourites = await prisma.food.findMany({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-    take: 6,
-  });
-
-  const rows = favourites.map(
-    (food: { id: string; name: string; defaultCalories: number }) => [
-      Markup.button.callback(
-        `${food.name} with ${food.defaultCalories} kcal`,
-        `log-favourite:${food.id}`,
-      ),
-    ],
-  );
-
-  if (options.addCancel) {
-    rows.push([Markup.button.callback("Cancel", "fav-cancel")]);
-  }
-
-  return Markup.inlineKeyboard(rows);
 }
 
 async function handleParsedInput(
@@ -113,7 +85,15 @@ async function handleParsedInput(
     where: { userId: id, name: parsed.foodName },
   });
   if (favourite) {
-    sessions.set(ctx.chat!.id, { kind: "parse-confirm", payload: { entryDate: getLocalDateKey(timezone), foodName: favourite.name, calories: favourite.defaultCalories, confidence: 0.99 } });
+    sessions.set(ctx.chat!.id, {
+      kind: "parse-confirm",
+      payload: {
+        entryDate: getLocalDateKey(timezone),
+        foodName: favourite.name,
+        calories: favourite.defaultCalories,
+        confidence: 0.99,
+      },
+    });
     await ctx.reply(
       `Eh found your favourite: ${favourite.name} with ${favourite.defaultCalories} kcal`,
       Markup.inlineKeyboard([
@@ -134,16 +114,6 @@ async function handleParsedInput(
     },
   );
   return;
-}
-
-async function handleLogInput(
-  ctx: Context,
-  id: string,
-  timezone: string,
-  text: string,
-): Promise<void> {
-  const parsed = await parseLogMessage(text, timezone);
-  await handleParsedInput(ctx, id, timezone, parsed);
 }
 
 async function handleBacklogInput(
@@ -179,7 +149,9 @@ export function registerLogCommands(
       });
       return;
     }
-    await handleLogInput(ctx, user.id, user.timezone, args);
+
+    const parsed = await parseLogMessage(args, user.timezone);
+    await handleParsedInput(ctx, user.id, user.timezone, parsed);
   });
 
   bot.command("backlog", async (ctx) => {
@@ -280,12 +252,14 @@ export function registerLogCommands(
         temperature: 0.8,
       });
       data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
+      console.log(data);
       if (
-        !data.food_name ||
-        !data.calories ||
-        !data.protein ||
-        !data.carbohydrates ||
-        !data.fat
+        typeof data.food_name !== "string" ||
+        !data.food_name.trim() ||
+        !Number.isFinite(data.calories) ||
+        !Number.isFinite(data.protein) ||
+        !Number.isFinite(data.carbohydrates) ||
+        !Number.isFinite(data.fat)
       ) {
         await ctx.reply(
           "Oi! You so fat already still want to anyhow? Give me a valid food description cb.",
@@ -294,7 +268,7 @@ export function registerLogCommands(
       }
 
       await ctx.reply(
-        `${data.calories} kcal, ${data.protein}g protein, ${data.carbohydrates}g carbohydrates, ${data.fat}g fat.\n\n${data.reasoning}`,
+        `${data.calories} kcal 🏃‍♂️, ${data.protein}g protein 💪, ${data.carbohydrates}g carbohydrates 🍚, ${data.fat}g fat 🍗.\n\n${data.reasoning}`,
       );
     } catch (err) {
       console.error("[bot] OpenAI error:", err);
@@ -304,49 +278,8 @@ export function registerLogCommands(
       return;
     }
     const outgoingLogMessage = `${data.food_name} ${data.calories}`;
-    handleLogInput(ctx, user.id, user.timezone, outgoingLogMessage);
-  });
-
-  bot.command("fav", async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) return;
-
-    await ctx.reply(FAV_MENU_MESSAGE, {
-      ...(await getFavouritesKeyboard(user.id, { addCancel: true })),
-    });
-  });
-
-  bot.command("addfav", async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) return;
-
-    const args = ctx.message.text.replace(/^\/addfav(@\w+)?\s*/, "").trim();
-    if (!args) {
-      await ctx.reply("Use `/addfav <food> <calories>` to add a favourite.", {
-        parse_mode: "Markdown",
-      });
-      return;
-    }
-
-    const match = args.match(/^(.+)\s+(-?\d{2,5})$/);
-    if (!match) {
-      await ctx.reply(
-        "Invalid format. Use `/addfav <food> <calories>` to add a favourite.",
-        {
-          parse_mode: "Markdown",
-        },
-      );
-      return;
-    }
-
-    await prisma.food.create({
-      data: {
-        userId: user.id,
-        name: match[1].toLowerCase(),
-        defaultCalories: Number(match[2]),
-      },
-    });
-    await ctx.reply(`Favourite ${match[1]} created.`);
+    const parsed = await parseLogMessage(outgoingLogMessage, user.timezone);
+    await handleParsedInput(ctx, user.id, user.timezone, parsed);
   });
 
   bot.command("editlast", async (ctx) => {
@@ -389,7 +322,10 @@ export function registerLogCommands(
     if (!user) return;
 
     const lastEntry = await prisma.mealEntry.findFirst({
-      where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) } },
+      where: {
+        userId: user.id,
+        createdAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -402,27 +338,42 @@ export function registerLogCommands(
       kind: "delete-last-confirm",
       payload: { foodName: lastEntry.foodName, entryId: lastEntry.id },
     });
-    await ctx.reply(`You sure you want to delete ${lastEntry.foodName} with ${lastEntry.calories} kcal anot?`, {
-      parse_mode: "Markdown",
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback("Yes", "delete-last-confirm")],
-        [Markup.button.callback("No", "delete-last-reject")],
-      ]),
-    });
+    await ctx.reply(
+      `You sure you want to delete ${lastEntry.foodName} with ${lastEntry.calories} kcal anot?`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback("Yes", "delete-last-confirm")],
+          [Markup.button.callback("No", "delete-last-reject")],
+        ]),
+      },
+    );
   });
 
   bot.action("delete-last-confirm", async (ctx) => {
     const user = await requireUser(ctx);
     if (!user) return;
     const session = sessions.get(ctx.chat!.id);
-    if (!session || session.kind !== "delete-last-confirm" || !session.payload.entryId) {
+    if (
+      !session ||
+      session.kind !== "delete-last-confirm" ||
+      !session.payload.entryId
+    ) {
       await ctx.answerCbQuery("Nothing to confirm");
       return;
     }
 
-    await prisma.mealEntry.delete({
+    const entry = await prisma.mealEntry.findUnique({
       where: { id: session.payload.entryId },
+      select: { id: true, userId: true },
     });
+    if (!entry || entry.userId !== user.id) {
+      sessions.delete(ctx.chat!.id);
+      await ctx.answerCbQuery("Entry not found");
+      return;
+    }
+
+    await prisma.mealEntry.delete({ where: { id: entry.id } });
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
     await ctx.reply(`Deleted ${session.payload.foodName}.`);
@@ -432,30 +383,6 @@ export function registerLogCommands(
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
     await ctx.reply("Cancelled. Don't anyhow ah...");
-  });
-
-  bot.action(/log-favourite:(.+)/, async (ctx) => {
-    const user = await requireUser(ctx);
-    if (!user) return;
-
-    const food = await prisma.food.findUnique({ where: { id: ctx.match[1] } });
-    if (!food) {
-      await ctx.answerCbQuery("favourite not found");
-      return;
-    }
-
-    const todayKey = getLocalDateKey(user.timezone);
-
-    await createMealEntry(
-      user.id,
-      todayKey,
-      food.name,
-      food.defaultCalories,
-      "favourite",
-    );
-
-    await ctx.answerCbQuery();
-    await ctx.reply(`Logged ${food.name} for ${food.defaultCalories} kcal.`);
   });
 
   bot.action("parse-confirm", async (ctx) => {
@@ -480,16 +407,6 @@ export function registerLogCommands(
       "parsed",
     );
 
-    // await prisma.parserAudit.create({
-    //   data: {
-    //     userId: user.id,
-    //     rawMessage: "telegram-natural-language",
-    //     parsedPayload: session.payload,
-    //     confidence: session.payload.confidence,
-    //     accepted: true,
-    //   },
-    // });
-
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
     await ctx.reply("Saved parsed entry.");
@@ -499,26 +416,8 @@ export function registerLogCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    // const session = sessions.get(ctx.chat!.id);
-    // if (session?.kind === "parse-confirm") {
-    //   await prisma.parserAudit.create({
-    //     data: {
-    //       userId: user.id,
-    //       rawMessage: "telegram-natural-language",
-    //       parsedPayload: session.payload,
-    //       confidence: session.payload.confidence,
-    //       accepted: false,
-    //     },
-    //   });
-    // }
-
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
     await ctx.reply("Cancelled. Walao don't anyhow leh...");
-  });
-
-  bot.action("fav-cancel", async (ctx) => {
-    await ctx.answerCbQuery();
-    await ctx.reply("Cancelled. Don't anyhow ah...");
   });
 }
