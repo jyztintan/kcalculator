@@ -6,6 +6,7 @@ import { registerLogCommands } from "./log.js";
 import { registerStatsCommands } from "./stats.js";
 import { registerReminderCommands } from "./reminders.js";
 import { message } from "telegraf/filters";
+import { registerFavCommands } from "./fav.js";
 
 function isAllowedUser(telegramId: string) {
   return allowedTelegramIds.has(telegramId);
@@ -81,6 +82,7 @@ export function createTelegramBot() {
 
   // this order is important because the log commands will catch all natural language messages
   registerReminderCommands(bot, requireUser);
+  registerFavCommands(bot, requireUser);
   registerStatsCommands(bot, requireUser);
   registerLogCommands(bot, requireUser);
 
