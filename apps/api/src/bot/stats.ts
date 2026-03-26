@@ -18,8 +18,15 @@ export function registerStatsCommands(
     const user = await requireUser(ctx);
     if (!user) return;
 
-    const arg = ctx.message.text.replace(/^\/day(@\w+)?\s*/, "").trim() || undefined;
+    const arg =
+      ctx.message.text.replace(/^\/day(@\w+)?\s*/, "").trim() || undefined;
     await ctx.reply(await getDaySummaryText(user.id, arg));
+  });
+
+  bot.command("yesterday", async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+    await ctx.reply(await getDaySummaryText(user.id, "yesterday"));
   });
 
   bot.command("week", async (ctx) => {
@@ -53,10 +60,11 @@ export function registerStatsCommands(
     const labels = analytics.trend.map((point) => point.date.slice(5));
     const caloriesData = analytics.trend.map((point) => point.calories);
     const targetData = analytics.trend.map((point) => point.target);
-    const barBackgroundColors = analytics.trend.map((point) =>
-      point.calories > point.target
-        ? "rgba(255, 99, 132, 0.6)" // red when exceeded
-        : "rgba(54, 162, 235, 0.6)", // blue when did not exceed
+    const barBackgroundColors = analytics.trend.map(
+      (point) =>
+        point.calories > point.target
+          ? "rgba(255, 99, 132, 0.6)" // red when exceeded
+          : "rgba(54, 162, 235, 0.6)", // blue when did not exceed
     );
     const barBorderColors = analytics.trend.map((point) =>
       point.calories > point.target
@@ -152,5 +160,4 @@ export function registerStatsCommands(
 
     await ctx.reply(`Your daily target is now ${match[2]} kcal.`);
   });
-
 }

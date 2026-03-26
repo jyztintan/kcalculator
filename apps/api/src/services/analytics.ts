@@ -138,7 +138,7 @@ export async function getDashboardAnalytics({ userId, days }: AnalyticsInput) {
 function resolveDateKey(timezone: string, dateArg: string | undefined): string {
   const todayKey = getLocalDateKey(timezone);
   if (!dateArg || dateArg.toLowerCase() === "today") return todayKey;
-  if (dateArg.toLowerCase() === "yesterday")
+  if (dateArg.toLowerCase().startsWith("yest"))
     return addDaysToDateKey(normalizeDateKey(todayKey), -1);
   if (
     /^\d{2}-\d{2}-\d{4}$/.test(dateArg) ||
