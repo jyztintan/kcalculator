@@ -9,50 +9,6 @@ const openai = env.OPENAI_API_KEY
     })
   : null;
 
-async function llmParse(
-  message: string,
-  _timezone: string,
-): Promise<ParseLogResult | null> {
-  if (!openai) {
-    return null;
-  }
-
-  const completion = await openai.responses.create({
-    model: env.OPENAI_MODEL,
-    temperature: 0,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text: [
-              "Extract a calorie log into JSON.",
-              "Return only JSON with keys: confidence, entryDate, foodName, calories, clarification.",
-              "Use today's date if no date is given.",
-            ].join(" "),
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: message }],
-      },
-    ],
-  });
-
-  const text = completion.output_text;
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return parseLogResultSchema.parse(JSON.parse(text));
-  } catch {
-    return null;
-  }
-}
-
 export async function parseLogMessage(message: string, timezone: string) {
   const normalized = message.trim().toLowerCase();
   const rawFoodName = normalized
