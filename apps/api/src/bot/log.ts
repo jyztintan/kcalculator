@@ -88,7 +88,7 @@ async function handleParsedInput(
     sessions.set(ctx.chat!.id, {
       kind: "parse-confirm",
       payload: {
-        entryDate: getLocalDateKey(timezone),
+        entryDate: parsed.entryDate,
         foodName: favourite.name,
         calories: favourite.defaultCalories,
         confidence: 0.99,
@@ -161,7 +161,7 @@ export function registerLogCommands(
     const args = ctx.message.text.replace(/^\/backlog(@\w+)?\s*/, "").trim();
     if (!args) {
       await ctx.reply(
-        "Use `/backlog YYYY-MM-DD <food> <kcal>` to log a past meal.",
+        "Use `/backlog [YYYY-MM-DD] <food> <kcal>` to log a past meal. If no date is given, I use yesterday.",
         { parse_mode: "Markdown" },
       );
       return;

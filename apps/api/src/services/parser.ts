@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { parseLogResultSchema, type ParseLogResult } from "@kcalculator/shared";
 import { env } from "../config/env.js";
-import { getLocalDateKey } from "./dates.js";
+import { addDaysToDateKey, getLocalDateKey } from "./dates.js";
 
 const openai = env.OPENAI_API_KEY
   ? new OpenAI({
@@ -29,17 +29,19 @@ export async function parseLogMessage(message: string, timezone: string) {
 
 export async function parseBacklogMessage(
   message: string,
-  _timezone: string,
+  timezone: string,
 ): Promise<ParseLogResult | null> {
   const trimmed = message.trim();
 
-  // Expect a leading ISO date, e.g. "2026-03-10 chicken rice 650"
-  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
-  if (!match) {
+  if (!trimmed) {
     return null;
   }
 
-  const [, datePart, rest] = match;
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
+  const datePart = match
+    ? match[1]
+    : addDaysToDateKey(getLocalDateKey(timezone), -1);
+  const rest = match ? match[2] : trimmed;
   const normalized = rest.trim().toLowerCase();
 
   const rawFoodName = normalized
