@@ -54,7 +54,6 @@ export async function createMealEntry(
 async function handleParsedInput(
   ctx: Context,
   id: string,
-  timezone: string,
   parsed: ParseLogResult,
 ): Promise<void> {
   if (!parsed.foodName) {
@@ -67,16 +66,14 @@ async function handleParsedInput(
 
   // 1. use explicit food name and calories if given
   if (parsed.foodName && parsed.calories) {
-    sessions.set(ctx.chat!.id, { kind: "parse-confirm", payload: parsed });
-    await ctx.reply(
-      `Confirm log: ${parsed.foodName} - ${parsed.calories} kcal`,
-      Markup.inlineKeyboard([
-        [
-          Markup.button.callback("Save", "parse-confirm"),
-          Markup.button.callback("Cancel", "parse-reject"),
-        ],
-      ]),
+    await createMealEntry(
+      id,
+      parsed.entryDate,
+      parsed.foodName,
+      parsed.calories,
+      "parsed",
     );
+    await ctx.reply(`Saved ${parsed.foodName} with ${parsed.calories} kcal.`);
     return;
   }
 
@@ -130,7 +127,7 @@ async function handleBacklogInput(
     );
     return;
   }
-  await handleParsedInput(ctx, id, timezone, parsed);
+  await handleParsedInput(ctx, id, parsed);
 }
 
 export function registerLogCommands(
@@ -151,7 +148,7 @@ export function registerLogCommands(
     }
 
     const parsed = await parseLogMessage(args, user.timezone);
-    await handleParsedInput(ctx, user.id, user.timezone, parsed);
+    await handleParsedInput(ctx, user.id, parsed);
   });
 
   bot.command("backlog", async (ctx) => {
@@ -279,7 +276,7 @@ export function registerLogCommands(
     }
     const outgoingLogMessage = `${data.food_name} ${data.calories}`;
     const parsed = await parseLogMessage(outgoingLogMessage, user.timezone);
-    await handleParsedInput(ctx, user.id, user.timezone, parsed);
+    await handleParsedInput(ctx, user.id, parsed);
   });
 
   bot.command("editlast", async (ctx) => {

@@ -180,8 +180,6 @@ export async function getDaySummaryText(
 
   const start = dateKeyToUtcMidnight(dateKey);
   const end = addDays(start, 1);
-  const dateKeyNorm = normalizeDateKey(dateKey);
-  const todayKeyNorm = normalizeDateKey(todayKey);
 
   const entries = await prisma.mealEntry.findMany({
     where: {
@@ -197,7 +195,7 @@ export async function getDaySummaryText(
     0,
   );
   const target = user?.defaultCalorieTarget ?? 0;
-  const remaining = Math.max(0, target - totalCalories);
+  const remaining = target - totalCalories;
 
   const lines =
     entries.length === 0
@@ -216,12 +214,9 @@ export async function getDaySummaryText(
   );
   const scolding =
     totalCalories > target
-      ? "KNN fatty today you exceed again... next time can control a bit anot? 🤡"
+      ? "\nKNN fatty you exceed again... next time can control a bit anot? 🤡"
       : "";
-  if (dateKeyNorm === todayKeyNorm && totalCalories > target) {
-    return `${message}${scolding}`;
-  }
-  return message;
+  return `${message}${scolding}`;
 }
 
 export async function getWeekSummaryText(userId: string): Promise<string> {
@@ -309,12 +304,16 @@ function formatDayText(
   target: number,
   remaining: number,
 ) {
-  return [
+  const isExceeded = remaining < 0;
+  var msg = [
     `bro you devoured ${totalCalories} kcal on ${dateLabel}`,
     ...lines,
     "",
-    `Total: ${totalCalories}/${target} kcal`,
-    `Remaining: ${remaining} kcal`,
-    "",
-  ].join("\n");
+    `Total: ${totalCalories}/${target} kcal`]
+  if (isExceeded) {
+    msg.push(`⁉️EXCEEDED⁉️: ${remaining} kcal`);
+  } else {
+    msg.push(`Remaining: ${remaining} kcal`);
+  }
+  return msg.join("\n");
 }
