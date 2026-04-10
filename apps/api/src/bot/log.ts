@@ -10,6 +10,7 @@ import { dateKeyToUtcMidnight, getLocalDateKey } from "../services/dates.js";
 import { parseBacklogMessage, parseLogMessage } from "../services/parser.js";
 import { EntrySource } from "@prisma/client";
 import { getFavouritesKeyboard } from "./fav.js";
+import { getDaySummaryText } from "../services/analytics.js";
 
 const openai = env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
@@ -74,6 +75,7 @@ async function handleParsedInput(
       "parsed",
     );
     await ctx.reply(`Saved ${parsed.foodName} with ${parsed.calories} kcal.`);
+    await ctx.reply(await getDaySummaryText(id, parsed.entryDate));
     return;
   }
 
@@ -187,7 +189,6 @@ export function registerLogCommands(
       protein: number;
       carbohydrates: number;
       fat: number;
-      reasoning: string;
     };
     try {
       const completion = await openai.chat.completions.create({
@@ -197,9 +198,6 @@ export function registerLogCommands(
           {
             role: "system",
             content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
-
-            Personality:
-            Loud, cheeky Singapore ah beng gym coach who roasts people for overeating. Your tone is funny, blunt, and Singlish-heavy.
 
             Task:
             Estimate calories and macros from food photos or descriptions.
@@ -213,33 +211,13 @@ export function registerLogCommands(
               "protein": number,
               "carbohydrates": number,
               "fat": number,
-              "reasoning": string
             }
 
             Rules:
             - food_name: short food name only
             - calories, protein, carbohydrates, fat: numbers
-            - reasoning: 4-6 sentences that combine:
-              • calorie explanation (ingredients, oil, portion)
-              • a funny Singlish roast
-            - explanation should naturally transition into the roast
-            - roasting intensity depends on portion size (small → light approval, large → aggressive roast)
-            - use emojis to enhance the humour
             - output must be valid JSON only, nothing else
-
-            Tone:
-            Singlish ah beng humour using words like lah, leh, sia, bro, walao, knn, cb.
-
-            Roasts should exaggerate body imagery such as:
-            - stomach becoming HDB flat
-            - needing belt extension
-            - eating like buffet challenge
-            - body expanding
-
-            Humour should feel like a gym bro clowning his friend: playful, exaggerated, never hateful.
-
-            Example tone:
-            "Wah this chicken rice about 700 kcal lah — rice cooked with chicken fat plus roasted chicken confirm add up. But bro you say half chicken only, your appetite look like preparing for buffet challenge sia, later stomach expand until become HDB 5-room flat 😂"`,
+            `,
           },
           {
             role: "user",
@@ -264,8 +242,36 @@ export function registerLogCommands(
         return;
       }
 
+      const completion2 = await openai.chat.completions.create({
+        model: env.OPENAI_MODEL,
+        response_format: { type: "text" },
+        messages: [
+          {
+            role: "system",
+            content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
+
+            It speaks in the voice of a cheeky, loud ah beng — blunt, no-nonsense, and always funny-offensive. It must roast the user in a comical, over-the-top Singlish style when they overeat, using exaggerated body imagery, local humour, and the occasional Hokkien curse words like “cb” or “knn” (kept mild and funny, not overused). The tone should feel like a fitness coach clowning the user, roasting them for laughs while still delivering calorie accountability. 
+
+            Rules:
+            - 4-6 sentences that combine:
+              • calorie explanation (ingredients, oil, portion)
+              • a funny Singlish roast
+            - calorie explanation should naturally transition into the roast
+            - roasting intensity depends on portion size (small → light approval, large → aggressive roast)
+            - use emojis to enhance the humour`,
+          },
+          {
+            role: "user",
+            content: ctx.message.text,
+          },
+        ],
+        temperature: 0.8,
+      });
+      const roast = completion2.choices[0]?.message?.content?.trim() ?? "";
+      console.log(roast)
+
       await ctx.reply(
-        `${data.calories} kcal 🏃‍♂️, ${data.protein}g protein 💪, ${data.carbohydrates}g carbohydrates 🍚, ${data.fat}g fat 🍗.\n\n${data.reasoning}`,
+        `${data.calories} kcal 🏃‍♂️, ${data.protein}g protein 💪, ${data.carbohydrates}g carbohydrates 🍚, ${data.fat}g fat 🍗.\n\n${roast}`,
       );
     } catch (err) {
       console.error("[bot] OpenAI error:", err);
@@ -276,7 +282,23 @@ export function registerLogCommands(
     }
     const outgoingLogMessage = `${data.food_name} ${data.calories}`;
     const parsed = await parseLogMessage(outgoingLogMessage, user.timezone);
-    await handleParsedInput(ctx, user.id, parsed);
+    // if no foodname or calories or calories == 0
+    if (parsed.foodName && parsed.calories) {
+      sessions.set(ctx.chat!.id, {
+        kind: "parse-confirm",
+        payload: parsed,
+      });
+      await ctx.reply(
+        `Save ${parsed.foodName} with ${parsed.calories} kcal?`,
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback("Save", "parse-confirm"),
+            Markup.button.callback("Cancel", "parse-reject"),
+          ],
+        ]),
+      );
+      return;
+    }
   });
 
   bot.command("editlast", async (ctx) => {
