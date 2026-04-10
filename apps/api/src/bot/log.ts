@@ -59,6 +59,8 @@ function isEstimatedMeal(data: unknown): data is EstimatedMeal {
     typeof candidate.food_name === "string" &&
     !!candidate.food_name.trim() &&
     Number.isFinite(candidate.calories) &&
+    typeof candidate.calories === "number" &&
+    candidate.calories > 0 &&
     Number.isFinite(candidate.protein) &&
     Number.isFinite(candidate.carbohydrates) &&
     Number.isFinite(candidate.fat)
@@ -113,9 +115,9 @@ async function handleEstimatedMealInput(
   const parsedData = JSON.parse(
     completion.choices[0]?.message?.content?.trim() ?? "",
   ) as unknown;
-  if (!isEstimatedMeal(parsedData)) {
+  if (!isEstimatedMeal(parsedData) || parsedData.calories === 0) {
     await ctx.reply(
-      "Oi! You so fat already still want to anyhow? Give me a valid food description cb.",
+      "Oi! You so fat already still want to anyhow? Give me a valid food description cb or use /help if you blur blur...",
     );
     return;
   }
@@ -499,6 +501,7 @@ export function registerLogCommands(
     sessions.delete(ctx.chat!.id);
     await ctx.answerCbQuery();
     await ctx.reply("Saved parsed entry.");
+    await ctx.reply(await getDaySummaryText(user.id, session.payload.entryDate));
   });
 
   bot.action("parse-reject", async (ctx) => {
