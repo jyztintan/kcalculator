@@ -34,6 +34,143 @@ const sessions = new Map<number, SessionState>();
 const LOG_MENU_MESSAGE =
   "Send `/log <food> <kcal>` — for example, `/log chicken rice 650` — or choose a favourite:";
 
+type EstimatedMeal = {
+  food_name: string;
+  calories: number;
+  protein: number;
+  carbohydrates: number;
+  fat: number;
+};
+
+type EstimateInputContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    >;
+
+function isEstimatedMeal(data: unknown): data is EstimatedMeal {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+
+  const candidate = data as Partial<EstimatedMeal>;
+  return (
+    typeof candidate.food_name === "string" &&
+    !!candidate.food_name.trim() &&
+    Number.isFinite(candidate.calories) &&
+    Number.isFinite(candidate.protein) &&
+    Number.isFinite(candidate.carbohydrates) &&
+    Number.isFinite(candidate.fat)
+  );
+}
+
+async function handleEstimatedMealInput(
+  ctx: Context,
+  timezone: string,
+  userContent: EstimateInputContent,
+): Promise<void> {
+  if (!openai) {
+    throw new Error("OpenAI client is not configured");
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: env.OPENAI_MODEL,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
+
+            Task:
+            Estimate calories and macros from food photos or descriptions.
+
+            Return ONLY valid JSON.
+
+            Schema:
+            {
+              "food_name": string,
+              "calories": number,
+              "protein": number,
+              "carbohydrates": number,
+              "fat": number,
+            }
+
+            Rules:
+            - food_name: short food name only
+            - calories, protein, carbohydrates, fat: numbers
+            - output must be valid JSON only, nothing else
+            `,
+      },
+      {
+        role: "user",
+        content: userContent,
+      },
+    ],
+    temperature: 0.2,
+  });
+
+  const parsedData = JSON.parse(
+    completion.choices[0]?.message?.content?.trim() ?? "",
+  ) as unknown;
+  if (!isEstimatedMeal(parsedData)) {
+    await ctx.reply(
+      "Oi! You so fat already still want to anyhow? Give me a valid food description cb.",
+    );
+    return;
+  }
+
+  const completion2 = await openai.chat.completions.create({
+    model: env.OPENAI_MODEL,
+    response_format: { type: "text" },
+    messages: [
+      {
+        role: "system",
+        content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
+
+            It speaks in the voice of a cheeky, loud ah beng — blunt, no-nonsense, and always funny-offensive. It must roast the user in a comical, over-the-top Singlish style when they overeat, using exaggerated body imagery, local humour, and the occasional Hokkien curse words like “cb” or “knn” (kept mild and funny, not overused). The tone should feel like a fitness coach clowning the user, roasting them for laughs while still delivering calorie accountability. 
+
+            Rules:
+            - 4-6 sentences that combine:
+              • calorie explanation (ingredients, oil, portion)
+              • a funny Singlish roast
+            - calorie explanation should naturally transition into the roast
+            - roasting intensity depends on portion size (small → light approval, large → aggressive roast)
+            - use emojis to enhance the humour`,
+      },
+      {
+        role: "user",
+        content: userContent,
+      },
+    ],
+    temperature: 0.8,
+  });
+
+  const roast = completion2.choices[0]?.message?.content?.trim() ?? "";
+  await ctx.reply(
+    `${parsedData.calories} kcal 🏃‍♂️, ${parsedData.protein}g protein 💪, ${parsedData.carbohydrates}g carbohydrates 🍚, ${parsedData.fat}g fat 🍗.\n\n${roast}`,
+  );
+
+  sessions.set(ctx.chat!.id, {
+    kind: "parse-confirm",
+    payload: {
+      entryDate: getLocalDateKey(timezone),
+      foodName: parsedData.food_name.trim(),
+      calories: parsedData.calories,
+      confidence: 0.99,
+    },
+  });
+  await ctx.reply(
+    `Save ${parsedData.food_name.trim()} with ${parsedData.calories} kcal?`,
+    Markup.inlineKeyboard([
+      [
+        Markup.button.callback("Save", "parse-confirm"),
+        Markup.button.callback("Cancel", "parse-reject"),
+      ],
+    ]),
+  );
+}
+
 export async function createMealEntry(
   userId: string,
   entryDate: string,
@@ -183,121 +320,54 @@ export function registerLogCommands(
       );
       return;
     }
-    var data: {
-      food_name: string;
-      calories: number;
-      protein: number;
-      carbohydrates: number;
-      fat: number;
-    };
     try {
-      const completion = await openai.chat.completions.create({
-        model: env.OPENAI_MODEL,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
-
-            Task:
-            Estimate calories and macros from food photos or descriptions.
-
-            Return ONLY valid JSON.
-
-            Schema:
-            {
-              "food_name": string,
-              "calories": number,
-              "protein": number,
-              "carbohydrates": number,
-              "fat": number,
-            }
-
-            Rules:
-            - food_name: short food name only
-            - calories, protein, carbohydrates, fat: numbers
-            - output must be valid JSON only, nothing else
-            `,
-          },
-          {
-            role: "user",
-            content: ctx.message.text,
-          },
-        ],
-        temperature: 0.2,
-      });
-      data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
-      console.log(data);
-      if (
-        typeof data.food_name !== "string" ||
-        !data.food_name.trim() ||
-        !Number.isFinite(data.calories) ||
-        !Number.isFinite(data.protein) ||
-        !Number.isFinite(data.carbohydrates) ||
-        !Number.isFinite(data.fat)
-      ) {
-        await ctx.reply(
-          "Oi! You so fat already still want to anyhow? Give me a valid food description cb.",
-        );
-        return;
-      }
-
-      const completion2 = await openai.chat.completions.create({
-        model: env.OPENAI_MODEL,
-        response_format: { type: "text" },
-        messages: [
-          {
-            role: "system",
-            content: `You are Fatty Fatty Bom Bom — a calorie estimating assistant focused on Singapore hawker food, Chinese dishes, and Southeast Asian meals.
-
-            It speaks in the voice of a cheeky, loud ah beng — blunt, no-nonsense, and always funny-offensive. It must roast the user in a comical, over-the-top Singlish style when they overeat, using exaggerated body imagery, local humour, and the occasional Hokkien curse words like “cb” or “knn” (kept mild and funny, not overused). The tone should feel like a fitness coach clowning the user, roasting them for laughs while still delivering calorie accountability. 
-
-            Rules:
-            - 4-6 sentences that combine:
-              • calorie explanation (ingredients, oil, portion)
-              • a funny Singlish roast
-            - calorie explanation should naturally transition into the roast
-            - roasting intensity depends on portion size (small → light approval, large → aggressive roast)
-            - use emojis to enhance the humour`,
-          },
-          {
-            role: "user",
-            content: ctx.message.text,
-          },
-        ],
-        temperature: 0.8,
-      });
-      const roast = completion2.choices[0]?.message?.content?.trim() ?? "";
-      console.log(roast)
-
-      await ctx.reply(
-        `${data.calories} kcal 🏃‍♂️, ${data.protein}g protein 💪, ${data.carbohydrates}g carbohydrates 🍚, ${data.fat}g fat 🍗.\n\n${roast}`,
-      );
+      await handleEstimatedMealInput(ctx, user.timezone, ctx.message.text);
     } catch (err) {
       console.error("[bot] OpenAI error:", err);
       await ctx.reply(
-        "Something went wrong talking to the assistant. Try again later.",
+        "Send me a valid food description or photo to estimate calories.",
       );
       return;
     }
-    const outgoingLogMessage = `${data.food_name} ${data.calories}`;
-    const parsed = await parseLogMessage(outgoingLogMessage, user.timezone);
-    // if no foodname or calories or calories == 0
-    if (parsed.foodName && parsed.calories) {
-      sessions.set(ctx.chat!.id, {
-        kind: "parse-confirm",
-        payload: parsed,
-      });
+  });
+
+  bot.on(message("photo"), async (ctx) => {
+    const user = await requireUser(ctx);
+    if (!user) return;
+
+    if (!openai) {
       await ctx.reply(
-        `Save ${parsed.foodName} with ${parsed.calories} kcal?`,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback("Save", "parse-confirm"),
-            Markup.button.callback("Cancel", "parse-reject"),
-          ],
-        ]),
+        "I currently don't have the yapping capabilities, try again later...",
       );
       return;
+    }
+
+    const photo = ctx.message.photo.at(-1);
+    if (!photo) {
+      await ctx.reply("Send a proper food photo lah.");
+      return;
+    }
+
+    try {
+      const photoUrl = await ctx.telegram.getFileLink(photo.file_id);
+      const caption = ctx.message.caption?.trim();
+      await handleEstimatedMealInput(ctx, user.timezone, [
+        {
+          type: "text",
+          text: caption
+            ? `Estimate the food in this photo. User caption: ${caption}`
+            : "Estimate the food in this photo.",
+        },
+        {
+          type: "image_url",
+          image_url: { url: photoUrl.toString() },
+        },
+      ]);
+    } catch (err) {
+      console.error("[bot] OpenAI photo error:", err);
+      await ctx.reply(
+        "Send me a valid food description or photo to estimate calories.",
+      );
     }
   });
 
