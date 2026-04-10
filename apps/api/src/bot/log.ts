@@ -224,7 +224,7 @@ export function registerLogCommands(
             content: ctx.message.text,
           },
         ],
-        temperature: 0.8,
+        temperature: 0.2,
       });
       data = JSON.parse(completion.choices[0]?.message?.content?.trim() ?? "");
       console.log(data);
